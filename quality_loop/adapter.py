@@ -72,9 +72,15 @@ class Adapter:
         """The operator's files stood in for, for one room, or None."""
         return None
 
-    def runs(self, cases: list[scenario.Scenario]) -> list[tuple[scenario.Scenario, str]]:
+    def runs(self, cases: list[scenario.Scenario],
+             named: bool = False) -> list[tuple[scenario.Scenario, str]]:
         """``(scenario, variant)`` pairs: the same scenario on several fixture
-        configs is several rooms. The default is one room per scenario."""
+        configs is several rooms. The default is one room per scenario.
+
+        ``named`` says the scenarios were picked by name rather than being
+        every one there is - a product can leave out of a run of everything
+        those that need a screen only the person running it can put up.
+        """
         return [(case, "") for case in cases]
 
     def alive(self) -> bool:

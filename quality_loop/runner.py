@@ -77,7 +77,7 @@ def run(adapter, names: list[str] | None = None, model: str | None = None,
     bundle = adapter.bundle()
     try:
         with adapter.product():
-            for case, variant in adapter.runs(cases):
+            for case, variant in adapter.runs(cases, named=bool(names)):
                 label = case.name + (f".{variant}" if variant else "")
                 say(f"\n== {label}: {case.title}")
                 reports.append((label, case.title, _one(
