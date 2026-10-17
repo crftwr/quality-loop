@@ -67,6 +67,16 @@ The Windows backends are unit-tested only, pending a run on a Windows machine.
 - **Windows ctypes** declare every `argtypes` and `restype`. The default
   `c_int` restype truncates handles on 64-bit.
 
+## Compatibility
+
+- **Before 1.0.0**, any release may break the API: the adapter interface, the
+  scenario and report formats, the operator's tools.
+- **From 1.0.0**, compatibility is kept outside major releases as a rule.
+  quality-loop is a developer tool, not an end-user product, so an exception
+  is weighed case by case rather than ruled out.
+
+Either way, a release note says what a downstream adapter has to change.
+
 ## Releasing
 
 The version lives only in `quality_loop/__init__.py`. `pyproject.toml` reads

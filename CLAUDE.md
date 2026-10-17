@@ -32,10 +32,15 @@ XeFM (planned). Both live as sibling checkouts (`../keyhac`, `../xefm`).
   OPERATOR.md, screens), run the toy:
   `.venv/bin/python examples/toy/run.py`. Unit tests have not caught what
   only a real `claude` shows.
-- **Downstream pins `quality-loop>=X.Y.Z`.** Keyhac's `qa/` uses the Adapter
-  API, `screens.Page/Terminal`, `standin.StandIn/Watch`, `session.Session` and
-  `audit.Policy`. Check `../keyhac/qa/run.py` before changing any of those, and
-  say in the release note what a downstream adapter must change.
+- **Compatibility.** Until 1.0.0, breaking changes can happen in any
+  release. From 1.0.0, compatibility is kept outside major releases as a
+  rule. quality-loop is a developer tool rather than an end-user product, so
+  an exception is judged case by case. Either way, downstream pins
+  `quality-loop>=X.Y.Z`, and Keyhac's `qa/` uses the Adapter API,
+  `screens.Page/Terminal`, `standin.StandIn/Watch`, `session.Session` and
+  `audit.Policy`. Check `../keyhac/qa/run.py` (and XeFM's adapter once there is
+  one) before changing any of those. Say in the release note what a downstream
+  adapter must change.
 - **Docs move with the code.** `docs/` describes the current behaviour. A
   change to a flag, a permission, the report format or the adapter API updates
   the page that describes it in the same commit.
