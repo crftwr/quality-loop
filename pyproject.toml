@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quality-loop"
+# version -> single-sourced from quality_loop/__init__.py's __version__.
+dynamic = ["version"]
+description = "Measure what an agent-facing product teaches: isolated agent runs of real tasks, reported by an operator agent"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "craftware" }]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+]
+# None at runtime: the harness drives `claude` and the product's own tools as
+# subprocesses, and everything it reads is JSON lines and Markdown.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-timeout>=2"]
+
+[project.urls]
+Homepage = "https://github.com/crftwr/quality-loop"
+Repository = "https://github.com/crftwr/quality-loop"
+Issues = "https://github.com/crftwr/quality-loop/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "quality_loop.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["quality_loop*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 60
