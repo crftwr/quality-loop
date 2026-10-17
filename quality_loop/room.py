@@ -42,8 +42,8 @@ evidence about what you were given.
 QUESTIONS = """\
 # What the skill did not tell me
 
-One section per thing you had to guess. Empty means the run measured nothing -
-see RULES.md.
+One section per thing you had to guess, in the form RULES.md gives. If nothing
+had to be guessed, leave it as it is.
 """
 
 

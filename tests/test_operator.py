@@ -38,10 +38,26 @@ def test_the_operator_is_restricted_with_no_mcp_and_a_short_allow_list(op):
     assert "Bash" not in allow and "Write" not in allow and "Edit" not in allow
     assert "Bash(/venv/python -m quality_loop screen:*)" in allow
     assert "Bash(/venv/python -m product.evidence:*)" in allow
-    writes = [rule for rule in allow if rule.startswith("Write(")]
-    assert writes == [f"Write({op.directory.resolve().as_posix()}/**)",
-                      f"Write({(op.room.resolve() / 'REPORT.md').as_posix()})"]
+    writes = [rule for rule in allow if rule.startswith(("Write(", "Edit("))]
+    assert writes == [f"Edit(/{op.directory.resolve().as_posix()}/**)",
+                      f"Edit(/{(op.room.resolve() / 'REPORT.md').as_posix()})"]
+    assert all(rule.startswith("Edit(//") for rule in writes), "absolute: //"
     assert _value(command, "--permission-mode") == "dontAsk"
+
+
+def test_a_windows_path_is_spelled_the_way_permission_rules_want(monkeypatch):
+    class Resolved:
+        def __init__(self, *_):
+            pass
+
+        def resolve(self):
+            return self
+
+        def as_posix(self):
+            return "C:/Users/me/rooms/r"
+
+    monkeypatch.setattr(operator.pathlib, "Path", Resolved)
+    assert operator.absolute("ignored") == "//c/Users/me/rooms/r"
 
 
 def test_the_two_phases_are_one_session(op):

@@ -39,6 +39,15 @@ class OperatorError(Exception):
     """A phase that cannot be trusted, and the room it cancels."""
 
 
+def absolute(path: pathlib.Path) -> str:
+    """A path as a Claude Code permission rule spells an absolute one:
+    ``//Users/me/x`` on macOS, ``//c/Users/me/x`` on Windows."""
+    posix = pathlib.Path(path).resolve().as_posix()
+    if len(posix) > 1 and posix[1] == ":":
+        posix = "/" + posix[0].lower() + posix[2:]
+    return "/" + posix
+
+
 def fingerprint(room: pathlib.Path) -> dict[str, str]:
     """``{relative path: sha256}`` of every file in the room."""
     found = {}
@@ -82,12 +91,17 @@ class Operator:
         return f"{self.python} -m quality_loop screen"
 
     def allow(self) -> list[str]:
-        """The permission list: read, the two CLIs, and two places to write."""
+        """The permission list: read, the two CLIs, and two places to write.
+
+        Writes are granted as Edit rules, which govern every built-in tool
+        that changes a file, Write included. Their paths are absolute, which
+        Claude Code spells with a leading ``//``. A single ``/`` is relative to
+        the settings file, and the first real run was refused every write.
+        """
         rules = ["Read", "Glob", "Grep", f"Bash({self.screen}:*)"]
         rules += [f"Bash({tool}:*)" for tool in self.evidence_tools]
-        for tool in ("Write", "Edit"):
-            rules += [f"{tool}({self.directory.resolve().as_posix()}/**)",
-                      f"{tool}({(self.room.resolve() / 'REPORT.md').as_posix()})"]
+        rules += [f"Edit({absolute(self.directory)}/**)",
+                  f"Edit({absolute(self.room / 'REPORT.md')})"]
         return rules
 
     def command(self, phase: int, message: str) -> list[str]:

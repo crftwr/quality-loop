@@ -359,3 +359,13 @@ def test_the_pages_are_served_and_what_is_done_on_them_is_recorded(tmp_path):
         served.write(tmp_path / "events.jsonl")
     assert served.events == [{"what": "approve"}]
     assert "file://" not in served.origin and served.origin.startswith("http://127.0.0.1:")
+
+
+def test_a_marker_the_room_can_reach_is_refused(tmp_path):
+    from quality_loop import runner
+    home, built = tmp_path / "home", tmp_path / "rooms" / "r"
+    with pytest.raises(runner.RunnerError, match="can reach"):
+        runner.refuse_a_reachable_marker(home / "stand-in", built, [home])
+    with pytest.raises(runner.RunnerError, match="can reach"):
+        runner.refuse_a_reachable_marker(built / "stand-in", built, [])
+    runner.refuse_a_reachable_marker(tmp_path / "aside" / "stand-in", built, [home])

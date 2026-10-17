@@ -13,3 +13,6 @@ build/
 .DS_Store
 .idea/
 .vscode/
+
+# Runs
+rooms/
