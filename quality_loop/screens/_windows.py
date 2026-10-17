@@ -66,9 +66,20 @@ def page_command(url: str) -> list[str]:
     return ["cmd", "/c", "start", "", "msedge", "--new-window", url]
 
 
+#: The shell a terminal screen runs in: PowerShell without the operator's
+#: profile, and kept open once the script ends. Given the script directly,
+#: Windows Terminal closes the tab when it exits, and the room has nothing to read.
+SHELL = ["powershell.exe", "-NoLogo", "-NoProfile", "-NoExit", "-Command"]
+
+
+def _powershell_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 def terminal_command(command: list[str], title: str) -> list[str]:
+    run = "& " + " ".join(_powershell_quote(part) for part in command)
     return ["wt.exe", "-w", "new", "--title", title, "--suppressApplicationTitle",
-            *command]
+            *SHELL, run]
 
 
 def _launch_and_find(launch: list[str], title: str, patience: float,

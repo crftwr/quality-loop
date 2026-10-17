@@ -11,7 +11,9 @@ once hunted for its task across every application the operator had open.
 
 from __future__ import annotations
 
+import pathlib
 import subprocess
+import tempfile
 import time
 
 from quality_loop.screens import ScreenError
@@ -41,13 +43,37 @@ def page_script(url: str) -> str:
 end tell'''
 
 
-def terminal_script(command: list[str], title: str) -> str:
-    """The AppleScript that runs ``command`` in a new Terminal window titled
-    ``title`` and answers that window's id."""
-    line = " ".join(_shell_quote(part) for part in command)
+#: The shell a terminal screen runs in: bash, without the operator's startup
+#: files and with a fixed prompt, so the screen reads the same on every machine.
+SHELL = "/bin/bash --noprofile --norc"
+
+
+def wrapper(command: list[str]) -> str:
+    """A bash script that clears the screen, runs ``command``, and then stays in
+    the fixed shell, so the output is still on screen for the room to read."""
+    run = " ".join(_shell_quote(part) for part in command)
+    return ("#!/bin/bash\n"
+            "printf '\\033c'\n"
+            f"{run}\n"
+            "export PS1='$ '\n"
+            # macOS's bash announces, every time, that zsh is the default now.
+            "export BASH_SILENCE_DEPRECATION_WARNING=1\n"
+            f"exec {SHELL} -i\n")
+
+
+def terminal_script(launch: str, title: str) -> str:
+    """The AppleScript that runs ``launch`` in a new Terminal window titled
+    ``title`` and answers that window's id.
+
+    Terminal types its command into the operator's own default shell, which
+    may not be a POSIX shell at all - on one machine it was a shell that knows
+    no ``exec``, and the screen never ran. So what is typed is a single
+    absolute path with no arguments, which any shell runs, and everything
+    else happens in the script it names.
+    """
     return f'''tell application "Terminal"
     activate
-    set t to do script {_quote(line)}
+    set t to do script {_quote(launch)}
     set custom title of t to {_quote(title)}
     set title displays custom title of t to true
     return id of front window
@@ -81,7 +107,11 @@ def open_page(url: str, title: str, patience: float) -> int:
 
 
 def open_terminal(command: list[str], title: str, patience: float) -> int:
-    window = int(_osascript(terminal_script(command, title)))
+    directory = pathlib.Path(tempfile.mkdtemp(prefix="quality-loop-terminal-"))
+    launch = directory / "screen"
+    launch.write_text(wrapper(command), encoding="utf-8")
+    launch.chmod(0o755)
+    window = int(_osascript(terminal_script(str(launch), title)))
     _wait("Terminal", window, title, patience)
     return window
 

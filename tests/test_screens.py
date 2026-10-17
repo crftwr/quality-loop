@@ -102,17 +102,22 @@ def test_the_macos_scripts_quote_what_they_are_given():
     page = _mac.page_script('http://127.0.0.1:1/a"b.html')
     assert 'set URL of front document to "http://127.0.0.1:1/a\\"b.html"' in page
     assert "return id of front window" in page
-    terminal = _mac.terminal_script(["/venv/python", "/tmp/it's.py"], 'deploy "acme"')
-    assert "'/tmp/it'\\\\''s.py'" in terminal
+    terminal = _mac.terminal_script("/tmp/q/screen", 'deploy "acme"')
+    assert 'do script "/tmp/q/screen"' in terminal, "one path, nothing a shell must parse"
     assert 'set custom title of t to "deploy \\"acme\\""' in terminal
+    script = _mac.wrapper(["/venv/python", "/tmp/it's.py"])
+    assert script.startswith("#!/bin/bash\n")
+    assert "'/tmp/it'\\''s.py'" in script
+    assert script.endswith("exec /bin/bash --noprofile --norc -i\n"), "stays in the fixed shell"
 
 
 def test_the_windows_commands():
     assert _windows.page_command("http://127.0.0.1:1/q.html") == [
         "cmd", "/c", "start", "", "msedge", "--new-window", "http://127.0.0.1:1/q.html"]
-    assert _windows.terminal_command(["py.exe", "d.py"], "deploy - acme") == [
-        "wt.exe", "-w", "new", "--title", "deploy - acme",
-        "--suppressApplicationTitle", "py.exe", "d.py"]
+    assert _windows.terminal_command(["py.exe", "it's.py"], "deploy - acme") == [
+        "wt.exe", "-w", "new", "--title", "deploy - acme", "--suppressApplicationTitle",
+        "powershell.exe", "-NoLogo", "-NoProfile", "-NoExit", "-Command",
+        "& 'py.exe' 'it''s.py'"]
 
 
 def test_on_windows_only_a_new_window_with_the_title_counts():
