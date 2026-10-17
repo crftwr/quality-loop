@@ -19,7 +19,6 @@ def op(tmp_path):
     return operator.Operator(
         room=room, directory=tmp_path / "rooms" / "11_f1.operator",
         scenario=tmp_path / "scenarios" / "11_f1.md", checkout=tmp_path / "checkout",
-        evidence_tools=["/venv/python -m product.evidence"],
         evidence_help="replay presses keys through the product's engine.",
         manifest=manifest_dir / "manifest.json", python="/venv/python", claude="claude")
 
@@ -28,16 +27,19 @@ def _value(command, flag):
     return command[command.index(flag) + 1]
 
 
-def test_the_operator_is_restricted_with_no_mcp_and_a_short_allow_list(op):
+def test_the_operator_has_no_shell_and_only_quality_loop_s_server(op):
     command = op.command(1, "go")
     assert command[:2] == ["claude", "--restricted"]
-    assert _value(command, "--tools") == "Read,Glob,Grep,Bash,Write,Edit"
-    assert json.loads(_value(command, "--mcp-config")) == {"mcpServers": {}}
+    assert _value(command, "--tools") == "Read,Glob,Grep,Write,Edit", "no Bash"
+    servers = json.loads(_value(command, "--mcp-config"))["mcpServers"]
+    assert list(servers) == ["quality-loop"], "never the product's own"
+    assert servers["quality-loop"]["args"] == ["-m", "quality_loop.mcp"]
+    assert servers["quality-loop"]["env"]["QUALITY_LOOP_MANIFEST"] == str(op.manifest)
     assert "--strict-mcp-config" in command
     allow = json.loads(_value(command, "--settings"))["permissions"]["allow"]
-    assert "Bash" not in allow and "Write" not in allow and "Edit" not in allow
-    assert "Bash(/venv/python -m quality_loop screen:*)" in allow
-    assert "Bash(/venv/python -m product.evidence:*)" in allow
+    assert not [rule for rule in allow if rule.startswith("Bash")]
+    assert "Write" not in allow and "Edit" not in allow
+    assert "mcp__quality-loop" in allow
     writes = [rule for rule in allow if rule.startswith(("Write(", "Edit("))]
     assert writes == [f"Edit(/{op.directory.resolve().as_posix()}/**)",
                       f"Edit(/{(op.room.resolve() / 'REPORT.md').as_posix()})"]
@@ -70,16 +72,14 @@ def test_the_two_phases_are_one_session(op):
 def test_the_messages_name_the_paths_and_tools_and_never_the_must_list(op):
     one = op.phase_one_message("mac")
     assert str(operator.INSTRUCTIONS) in one and str(op.scenario) in one
-    assert "screen list | open <name> | close <id>" in one
+    assert "screen_open" in one
     two = op.phase_two_message()
-    assert "/venv/python -m product.evidence --help" in two
+    assert "`evidence` tool" in two and "--help" in two
     assert str(op.room / "REPORT.md") in two
 
 
-def test_the_screen_cli_is_pointed_at_the_runner_s_manifest(op):
-    env = op.environment()
-    assert env["QUALITY_LOOP_MANIFEST"] == str(op.manifest)
-    assert env["GIT_CEILING_DIRECTORIES"]
+def test_the_operator_s_git_stops_at_the_rooms(op):
+    assert op.environment()["GIT_CEILING_DIRECTORIES"]
 
 
 def _fake_agent(monkeypatch, effect):

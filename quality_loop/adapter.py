@@ -28,8 +28,9 @@ class Adapter:
         skill_name: The bundle's directory name inside a room.
         fixtures: The directory screens are served or copied from, or None.
         screens: ``{name: Page | Terminal}`` - all the operator may put up.
-        evidence_tools: Command prefixes the operator may run, exactly as it
-            must type them.
+        evidence: ``{name: {"argv": [...], "help": "..."}}`` - commands that
+            read, which the operator runs through its MCP server with
+            arguments of its choosing and no shell.
         evidence_help: One paragraph on what those tools answer.
         python: The interpreter the operator's CLIs run under.
     """
@@ -41,7 +42,7 @@ class Adapter:
     skill_name = "product"
     fixtures: pathlib.Path | None = None
     screens: dict = {}
-    evidence_tools: list[str] = []
+    evidence: dict = {}
     evidence_help = ""
     python = sys.executable
 

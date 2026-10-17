@@ -10,10 +10,13 @@ enforced:
 
 - `--restricted` with an explicit `--tools`: no settings file of the
   operator's applies, so their broad permissions cannot widen this one.
-- No MCP servers at all. The screen is checked by the screen CLI with the
-  OS's own window list, never through the product under test.
-- Bash only for the screen CLI and the product's evidence tools, each as a
-  fixed command prefix.
+- **No shell.** Claude Code lets read-only commands through whatever the
+  allow list says, and `cat` reads anywhere; the first real operator ran
+  `cd; ls; cat ...` that way. Its only way to act is quality-loop's own MCP
+  server (`quality_loop.mcp`): the declared screens, and the product's
+  declared evidence commands run without a shell.
+- No other MCP server, the product's least of all: the screen is checked
+  with the OS's own window list, never through the product under test.
 - Writes only into the operator's own directory and the room's REPORT.md.
 - Phase 1 must not change the room. Every file in it is hashed before and
   after, and any difference cancels the room: TASK.md in particular has to
@@ -67,17 +70,14 @@ class Operator:
         directory: The operator's own, beside the room and outside it.
         scenario: The scenario file.
         checkout: The product's repository, readable in both phases.
-        evidence_tools: Command prefixes of the product's evidence CLI, as
-            the operator must type them (``["/venv/bin/python -m product.evidence"]``).
-        evidence_help: One paragraph on what those tools answer.
-        manifest: The screen manifest the runner wrote.
-        python: The interpreter the screen CLI runs under.
+        evidence_help: One paragraph on what the evidence tools answer.
+        manifest: The manifest the runner wrote: screens and evidence tools.
+        python: The interpreter quality-loop's MCP server runs under.
     """
     room: pathlib.Path
     directory: pathlib.Path
     scenario: pathlib.Path
     checkout: pathlib.Path
-    evidence_tools: list[str]
     evidence_help: str
     manifest: pathlib.Path
     python: str = sys.executable
@@ -86,30 +86,30 @@ class Operator:
     claude: str | None = None
     session_id: str = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
 
-    @property
-    def screen(self) -> str:
-        return f"{self.python} -m quality_loop screen"
-
     def allow(self) -> list[str]:
-        """The permission list: read, the two CLIs, and two places to write.
+        """The permission list: read, quality-loop's tools, two places to write.
 
         Writes are granted as Edit rules, which govern every built-in tool
         that changes a file, Write included. Their paths are absolute, which
         Claude Code spells with a leading ``//``. A single ``/`` is relative to
         the settings file, and the first real run was refused every write.
         """
-        rules = ["Read", "Glob", "Grep", f"Bash({self.screen}:*)"]
-        rules += [f"Bash({tool}:*)" for tool in self.evidence_tools]
-        rules += [f"Edit({absolute(self.directory)}/**)",
-                  f"Edit({absolute(self.room / 'REPORT.md')})"]
-        return rules
+        return ["Read", "Glob", "Grep", "mcp__quality-loop",
+                f"Edit({absolute(self.directory)}/**)",
+                f"Edit({absolute(self.room / 'REPORT.md')})"]
+
+    def servers(self) -> dict:
+        from quality_loop.screens import MANIFEST
+        return {"quality-loop": {"command": self.python, "args": ["-m", "quality_loop.mcp"],
+                                 "env": {MANIFEST: str(self.manifest)}}}
 
     def command(self, phase: int, message: str) -> list[str]:
         command = [self.claude or sessions.find_claude(), "--restricted",
-                   "--tools", "Read,Glob,Grep,Bash,Write,Edit",
+                   "--tools", "Read,Glob,Grep,Write,Edit",
                    "--add-dir", str(self.room), "--add-dir", str(self.checkout),
                    "--add-dir", str(self.manifest.parent),
-                   "--mcp-config", json.dumps({"mcpServers": {}}), "--strict-mcp-config",
+                   "--mcp-config", json.dumps({"mcpServers": self.servers()}),
+                   "--strict-mcp-config",
                    "--settings", json.dumps({"permissions": {"allow": self.allow()}}),
                    "--permission-mode", "dontAsk",
                    "--max-turns", str(self.max_turns),
@@ -121,23 +121,19 @@ class Operator:
         return command + ["-p", message]
 
     def environment(self) -> dict:
-        from quality_loop.screens import MANIFEST
-        env = sessions.Session(allow=[]).environment(self.directory)
-        env[MANIFEST] = str(self.manifest)
-        return env
+        return sessions.Session(allow=[]).environment(self.directory)
 
     def phase_one_message(self, platform: str) -> str:
         return (f"Phase 1. Read {INSTRUCTIONS} first; it is your whole job description.\n\n"
                 f"Scenario: {self.scenario}\nRoom: {self.room}\n"
                 f"Your directory: {self.directory}\nThis OS: {platform}\n"
-                f"Screen CLI: {self.screen} list | open <name> | close <id>\n")
+                f"Your tools: screen_list, screen_open, screen_close, evidence.\n")
 
     def phase_two_message(self) -> str:
-        tools = "\n".join(f"  {tool} --help" for tool in self.evidence_tools) or "  (none)"
         return (f"Phase 2. The room has finished. Room: {self.room}\n"
                 f"Write {self.room / 'REPORT.md'}, then close the screens you opened.\n\n"
-                f"The product's evidence tools - run each with --help first:\n{tools}\n"
-                f"{self.evidence_help}\n")
+                f"The product's evidence tools are in the `evidence` tool - call each "
+                f"with args [\"--help\"] first.\n{self.evidence_help}\n")
 
     def _run(self, phase: int, message: str, say) -> int:
         self.directory.mkdir(parents=True, exist_ok=True)

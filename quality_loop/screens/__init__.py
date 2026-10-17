@@ -76,8 +76,13 @@ class Terminal:
 
 
 def write_manifest(path: pathlib.Path, screens: dict, *, fixtures: pathlib.Path,
-                   origin: str, python: str, state: pathlib.Path) -> pathlib.Path:
-    """The declarations, made absolute, for the screen CLI to read."""
+                   origin: str, python: str, state: pathlib.Path,
+                   evidence: dict | None = None) -> pathlib.Path:
+    """The declarations, made absolute, for the operator's tools to read.
+
+    ``evidence`` is ``{name: {"argv": [...], "help": "..."}}``: the product's
+    evidence commands, run by the operator's MCP server and nothing else.
+    """
     entries = {}
     for name, screen in screens.items():
         entry = dataclasses.asdict(screen)
@@ -87,7 +92,8 @@ def write_manifest(path: pathlib.Path, screens: dict, *, fixtures: pathlib.Path,
             entry["script"] = str((pathlib.Path(fixtures) / screen.script).resolve())
         entries[name] = entry
     path.write_text(json.dumps({"screens": entries, "python": python,
-                                "state": str(state)}, indent=2), encoding="utf-8")
+                                "state": str(state), "evidence": evidence or {}},
+                               indent=2), encoding="utf-8")
     return path
 
 

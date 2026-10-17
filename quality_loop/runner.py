@@ -115,10 +115,10 @@ def _one(adapter, case, variant, here: pathlib.Path, bundle, model, operator_mod
                 private / "manifest.json", adapter.screens,
                 fixtures=adapter.fixtures or adapter.checkout,
                 origin=site.origin if site else "", python=adapter.python,
-                state=directory)
+                state=directory, evidence=adapter.evidence)
             op = operator.Operator(
                 room=built, directory=directory, scenario=case.path,
-                checkout=adapter.checkout, evidence_tools=adapter.evidence_tools,
+                checkout=adapter.checkout,
                 evidence_help=adapter.evidence_help, manifest=manifest,
                 python=adapter.python, model=operator_model)
             say("  operator: phase 1 - the screen")

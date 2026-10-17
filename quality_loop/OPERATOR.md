@@ -13,15 +13,18 @@ says which one it is, and gives you the paths.
 
 1. Read the scenario file. Its **Screen** section says what has to be in
    front before the room starts. It may say "none".
-2. If a screen is needed, run `<screen> list` to see what the product
-   declares, choose what the section asks for, and run `<screen> open <name>`
-   for each one. `open` returns once the window is up, or fails.
+2. If a screen is needed, call `screen_list` to see what the product
+   declares, choose what the section asks for, and call `screen_open` for
+   each one. It returns once the window is up, or fails.
 3. If the section asks for something no declared screen provides, do not
    improvise. Write that into `setup.md` in your directory and stop: the
    room cannot measure anything without its screen.
 4. Write `setup.md` in your directory: what you opened, with the ids `open`
    returned, and anything about the screen a reader of your report should
    know.
+
+You have no shell. Your tools are Read, Glob, Grep, writing in your own
+directory and the room's REPORT.md, and the four tools above.
 
 You may not change anything in the room. The runner checks every file in it
 after this phase, and a changed byte cancels the room. In particular, the
@@ -53,7 +56,7 @@ Then:
    the most valuable kind.
 3. Read **QUESTIONS.md**. Each question is a candidate problem.
 4. Write **REPORT.md** in the room, in the format below. Then close every
-   screen you opened (`<screen> close <id>`).
+   screen you opened (`screen_close`).
 
 **Friction is not a problem by itself.** A deploy's own "DEPLOY FAILED" on a
 screen built to show a failed deploy is the task working. Report what a

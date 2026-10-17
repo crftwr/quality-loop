@@ -68,8 +68,10 @@ class Toy(adapter.Adapter):
         # Where their file waits while the fixture stands in: beside the home,
         # never inside it, where the room would find a second style.txt.
         self.aside = pathlib.Path(tempfile.mkdtemp(prefix="toy-greeter-aside-"))
-        self.evidence_tools = [f"{sys.executable} {HERE / 'evidence.py'}"]
-        self.evidence_help = ("`evidence.py greeting <room>` says what greeting the "
+        self.evidence = {"greeter": {
+            "argv": [sys.executable, str(HERE / "evidence.py")],
+            "help": "greeting <room>: the room's greeting against the house style"}}
+        self.evidence_help = ("`greeter` with args [\"greeting\", <room>] says what greeting the "
                               "room left, the style it ran under, whether style.txt "
                               "is unchanged, and whether the greeting matches.")
 

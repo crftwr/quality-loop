@@ -9,10 +9,11 @@ room is started so it cannot read the repository where the answers are.
 Afterwards an **operator** agent reports the problems it finds in what the
 room did, each with a severity. A human decides what to do with the report.
 
-> Status: early development. The shared core is here: rooms, the session's
-> isolation, the audit, the transcript reader, standing fixtures in for the
-> operator's files, and fixture pages. The operator agent, Markdown scenarios
-> and the report format come next. The design is
+> Status: early development, run end to end against a toy product
+> (`examples/toy/run.py`). In place: rooms and their isolation, the audit,
+> the stand-in, fixture pages, screens by name on macOS and Windows,
+> Markdown scenarios, the operator agent and its MCP tools, and reports with
+> severities. The first real product, Keyhac, is next. The design is
 > [crftwr/keyhac#205](https://github.com/crftwr/keyhac/issues/205).
 
 ## What stays code, and why
