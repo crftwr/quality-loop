@@ -29,6 +29,7 @@ import dataclasses
 import hashlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import uuid
@@ -123,15 +124,27 @@ class Operator:
     def environment(self) -> dict:
         return sessions.Session(allow=[]).environment(self.directory)
 
+    @property
+    def instructions(self) -> pathlib.Path:
+        """OPERATOR.md, copied into the operator's own directory.
+
+        The package's copy is wherever quality-loop is installed, which is
+        outside everything the operator may read. A product's first real run
+        had an operator that never saw its job description, and wrote a
+        verdict.
+        """
+        return self.directory / "OPERATOR.md"
+
     def phase_one_message(self, platform: str) -> str:
-        return (f"Phase 1. Read {INSTRUCTIONS} first; it is your whole job description.\n\n"
+        return (f"Phase 1. Read {self.instructions} first; it is your whole job description.\n\n"
                 f"Scenario: {self.scenario}\nRoom: {self.room}\n"
                 f"Your directory: {self.directory}\nThis OS: {platform}\n"
                 f"Your tools: screen_list, screen_open, screen_close, evidence.\n")
 
     def phase_two_message(self) -> str:
         return (f"Phase 2. The room has finished. Room: {self.room}\n"
-                f"Write {self.room / 'REPORT.md'}, then close the screens you opened.\n\n"
+                f"Write {self.room / 'REPORT.md'} in the format {self.instructions} gives - "
+                f"problems with severities, no verdict - then close the screens you opened.\n\n"
                 f"The product's evidence tools are in the `evidence` tool - call each "
                 f"with args [\"--help\"] first.\n{self.evidence_help}\n")
 
@@ -156,6 +169,8 @@ class Operator:
 
     def phase_one(self, platform: str, say=print) -> None:
         """Put the screen up. Raises when the room was touched."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(INSTRUCTIONS, self.instructions)
         before = fingerprint(self.room)
         self._run(1, self.phase_one_message(platform), say)
         after = fingerprint(self.room)

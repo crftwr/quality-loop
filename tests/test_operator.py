@@ -71,7 +71,7 @@ def test_the_two_phases_are_one_session(op):
 
 def test_the_messages_name_the_paths_and_tools_and_never_the_must_list(op):
     one = op.phase_one_message("mac")
-    assert str(operator.INSTRUCTIONS) in one and str(op.scenario) in one
+    assert str(op.directory / "OPERATOR.md") in one and str(op.scenario) in one
     assert "screen_open" in one
     two = op.phase_two_message()
     assert "`evidence` tool" in two and "--help" in two
@@ -106,6 +106,8 @@ def test_phase_one_that_leaves_the_room_alone_passes_and_is_logged(op, monkeypat
     _fake_agent(monkeypatch, lambda command, kwargs: seen.update(kwargs))
     op.phase_one("mac", say=lambda _: None)
     assert seen["cwd"] == op.directory and seen["stdin"] is operator.subprocess.DEVNULL
+    assert (op.directory / "OPERATOR.md").read_text() == operator.INSTRUCTIONS.read_text(), \
+        "in a directory the operator can read, not the installed package"
     assert (op.directory / "phase1.jsonl").exists()
 
 
