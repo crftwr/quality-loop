@@ -1,0 +1,196 @@
+# Writing an adapter
+
+An adapter is the product's half of a run. Subclass `quality_loop.adapter.Adapter`,
+fill in what is the product's own, and hand an instance to
+`quality_loop.runner.run`. Everything else is the runner's: building rooms,
+isolating sessions, the stand-in, screens, the operator, the audit and the
+findings.
+
+`examples/toy/run.py` is a complete adapter in about 100 lines.
+[Keyhac's `qa/run.py`](https://github.com/crftwr/keyhac/blob/main/qa/run.py)
+is a real one: a product with a daemon, an MCP endpoint and screens.
+
+```python
+from quality_loop import adapter, audit, runner, screens, session, standin
+
+class Product(adapter.Adapter):
+    name = "product"
+    version = product.__version__
+    checkout = ROOT                       # the product's repository
+    rooms = ROOT / "cleanroom"            # gitignored; rooms are built here
+    scenarios = ROOT / "qa" / "scenarios"
+    skill_name = "product"                # the bundle's directory in a room
+    fixtures = ROOT / "qa" / "fixtures"   # pages and terminal scripts
+    screens = {...}
+    evidence = {...}
+    evidence_help = "..."
+
+    def bundle(self): ...
+    def rules(self): ...
+    def session(self, room): ...
+
+runner.run(Product(), names=None)        # or ["11", "12"]
+```
+
+## Required
+
+**`bundle()`** returns the surface under test, built for this run: a zip, as a
+user downloads it, or a directory. Build it here, not ahead of time. A stale
+bundle on disk tests last version's skill and reports its gaps as this
+version's.
+
+**`rules()`** returns `RULES.md` for the room. It says what the room may read
+and use, what it may not, and how to record a guess in `QUESTIONS.md` (append a
+section, never rewrite the file). Say what the product's own tools are
+(allowed, because they are the product's interface) and what is forbidden
+(the checkout, the installed package, other people's work). Then say it again
+plainly: asking anyone is forbidden, and nobody will answer.
+
+**`session(room)`** returns a `quality_loop.session.Session`: what the room's
+session may use.
+
+```python
+session.Session(
+    allow=["Read", "Glob", "Grep", "Write", "Edit", "TodoWrite", "mcp__product"],
+    add_dirs=[EXTENSIONS, DESKTOP],          # outside the room, reachable
+    mcp_servers={"product": {"command": bridge}},
+    tools=None,                              # None: --restricted's default, no Bash
+    env={},                                  # e.g. a PATH shim for a CLI product
+    max_turns=150)
+```
+
+A product whose surface is a CLI grants a narrowed Bash with `tools=[...,
+"Bash"]` and `allow=["Bash(product ext:*)", ...]`. Read
+[Isolation](isolation.md) first: Claude Code lets read-only shell commands
+through whatever the allow list says.
+
+## Optional
+
+**`policy(room)`** returns the `audit.Policy` the transcript is checked
+against:
+
+```python
+audit.Policy(
+    checkout=ROOT,
+    forbidden={"site-packages/product": "the installed package",
+               str(STAND_IN): "the user's own files, set aside"},
+    foreign={"theirs.py"},          # other authors' files the room must not read
+    servers=("product",),           # MCP servers that must be connected
+    leaked_skill=lambda c: "product" in c,   # the checkout's own skills
+    bash=False)                     # True when the room has Bash on purpose
+```
+
+**`product()`** is a context manager for the whole run: the product up, if a
+room needs it running. Keyhac's starts its daemon with the MCP endpoint on
+when none is answering, and quits it at the end. One that is already running
+is the user's, and is used and left alone.
+
+**`alive()`** is asked on the room's heartbeat. Two misses in a row end the
+room: a room that cannot reach the product measures the outage.
+
+**`stand_in(case, variant, room)`** returns a `standin.StandIn`, or None. Use
+it when the task edits the user's files:
+
+```python
+standin.StandIn(
+    home=PRODUCT_HOME,                       # where the stood-in files live
+    marker=PRODUCT_HOME / "stand-in",        # where the user's originals wait
+    fixtures={"config.py": fixture_text},
+    evidence=room / "evidence",
+    backups="config.py.bak-*",               # the product's own backups, kept
+    watch=[standin.Watch(EXTENSIONS, "extensions"),
+           standin.Watch(DESKTOP, "desktop"),
+           standin.Watch(PRODUCT_HOME, "home", skip=("endpoint.json",))],
+    staged=[(FIXTURES / "input.csv", DESKTOP / "input.csv")],
+    on_change=reload)                        # after swapping in, and back
+```
+
+- The **marker must be out of the room's reach**. The runner refuses a room
+  whose marker is inside the room or any of its `add_dirs`. The first toy run
+  put it inside the one directory the room could write to, and the room found
+  a second `style.txt` there.
+- **Everything new** in a watched directory moves into the room's evidence,
+  not only what the task asked for. `skip` names the product's own state
+  files, which moving would break.
+- The user's originals come back in a `finally`. A marker left behind by a run
+  that could not unwind refuses the next run. `standin.restore()` puts it back.
+- Fixtures are written with LF on every OS. The evidence keeps both versions,
+  as `evidence/before/<name>` and `evidence/after/<name>`.
+
+**`runs(cases, named)`** returns `(scenario, variant)` pairs. The default is
+one room per scenario. Keyhac runs a config-editing scenario on each fixture
+config, and leaves a scenario with `needs` out unless it was named.
+
+## Screens
+
+The operator can put up only what the adapter declares, by name:
+
+```python
+screens = {
+    "approval-queue": screens.Page("dialog.html", title="Queue — confirm each item"),
+    "deploy": screens.Terminal("deploy.py", title="deploy - acme"),
+}
+```
+
+- **`Page`** is an HTML file under `fixtures`. The runner serves it over a
+  local HTTP origin, from a copy outside the checkout, so the address bar does
+  not tell the room where the source is. A page reports what was done on it
+  by POSTing JSON to `event`. That record is written to
+  `evidence/screen-events.jsonl`.
+- **`Terminal`** is a **Python** script under `fixtures`, run with the
+  adapter's `python` from a copy, in a terminal window of its own. Python
+  means one script serves both OSes. The window runs a fixed shell (bash
+  without startup files on macOS, PowerShell `-NoProfile` on Windows) and
+  stays open after the script ends, so the output is still there to read.
+- **`title`** is how the window is recognised, on both OSes, with the OS's own
+  window list. Use the page's `<title>`, and a title of your own for a
+  terminal.
+
+## Evidence tools
+
+Commands the operator runs to check a Must line, declared by name:
+
+```python
+evidence = {"product": {
+    "argv": [sys.executable, str(ROOT / "qa" / "evidence.py")],
+    "help": "replay | bindings | preserved | calls | events"}}
+evidence_help = "One paragraph: what each subcommand answers, and the names to use."
+```
+
+The operator calls them as `evidence(tool="product", args=[...])` through
+quality-loop's MCP server. There is no shell, so arguments arrive as a list,
+verbatim.
+
+- **An evidence tool only reads.** That is the adapter's promise, and the
+  reason the operator may pass arguments of its choosing.
+- **Answer facts, as JSON.** "What the focused application received:
+  `Cmd-S`" beats a stream of key-down/key-up edges the operator has to
+  interpret. A tool that answers the question directly is cited correctly.
+- **Read the run's evidence.** That means `room/evidence/`,
+  `room/transcript.jsonl` and the screen events. Never read the live machine,
+  which has already been put back.
+- **Write ground truth out by hand.** A check that reads its expectations from
+  the page it is checking would agree with any page, including a broken one.
+- Start with `--help`. The operator is told to call each tool with `--help`
+  first.
+
+Keyhac's `qa/evidence.py` is the worked example. Its `replay` loads the
+room's config in Keyhac's own engine, presses keys through the fake hook, and
+answers what the focused application received.
+
+## Running it
+
+```python
+from quality_loop import runner
+findings = runner.run(Product(), names=["11"], model=None, operator_model=None)
+```
+
+`names` picks scenarios by number or name. None means every scenario the
+adapter's `runs()` keeps. SIGTERM unwinds like Ctrl-C, so the stand-in still
+puts the user's files back. The result is `FINDINGS.md` and `findings.json` in
+`rooms/<version>-<time>/`. Each room's directory sits beside them, with
+`<room>.operator/` holding the operator's notes and transcripts.
+
+Give the product a make target (Keyhac: `make qa CASE=11 CONFIGS=short`).
+Runs are started by a person, never by a hook or CI: they cost model time,
+swap the user's files, and open windows.
