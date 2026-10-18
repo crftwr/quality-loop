@@ -102,6 +102,8 @@ a launch command, a redirected home, and for a desktop app a window title.
   under a pseudo-terminal of that size, with a terminal emulator kept in
   step, so its screen is read as text and keys go in as an xterm sends them.
   Nothing on the desktop, nothing the person at the machine can disturb.
+  A lone Esc is followed by a short pause, and the app gets `ESCDELAY=25`:
+  a terminal app cannot otherwise tell Esc-then-a-key from Alt+that key.
   Needs `quality-loop[tui]`; macOS and Linux.
 - **`drive.DesktopApp(argv, title, env={}, cwd=None, patience=20, quit=None)`**
   is launched and recognised by its window title, driven with synthetic keys

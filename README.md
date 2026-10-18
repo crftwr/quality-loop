@@ -90,9 +90,12 @@ under a policy the person sets. See [Running the loop](https://github.com/crftwr
 
 ## Status
 
-0.x, early. It has been run end to end on macOS against the two examples and
-against Keyhac. The Windows screen and key backends are unit-tested but have
-not yet been run on a Windows machine. The design discussion is
+0.x, early. It has been run end to end on macOS against the two examples,
+Keyhac and XeFM (including XeFM's terminal UI in a live check), and on
+Windows (11, ARM64) against the toy, Keyhac and XeFM, with real page and
+terminal screens. Not yet run anywhere for real: synthetic keys and
+screenshots of a desktop app (`drive.DesktopApp`); a terminal app is not
+driven on Windows yet. The design discussion is
 [crftwr/keyhac#205](https://github.com/crftwr/keyhac/issues/205) and this
 repository's issues.
 

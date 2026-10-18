@@ -190,3 +190,34 @@ def test_mac_key_codes():
     assert _mac.keycode(keys.parse("Shift-G")) == (5, _mac.FLAGS["shift"])
     assert _mac.keycode(keys.parse("G")) == (5, 0), "a letter names the key"
     assert _mac.keycode(keys.parse("F1"))[0] == 122
+
+
+@posix_only
+def test_a_lone_esc_is_not_glued_to_the_next_key(tmp_path):
+    """Esc then Ctrl-T, sent 20ms apart, reached XeFM as Alt-Ctrl-T."""
+    pytest.importorskip("pyte")
+    from quality_loop.drive import terminal
+    script = tmp_path / "gaps.py"
+    script.write_text(textwrap.dedent('''
+        import os, sys, time, tty
+        tty.setraw(0)
+        last, out = time.monotonic(), []
+        while len(out) < 2:
+            data = os.read(0, 16)
+            now = time.monotonic()
+            out.append((data.hex(), round(now - last, 2)))
+            last = now
+        sys.stdout.write(repr(out) + "\\r\\n")
+        sys.stdout.flush()
+        time.sleep(5)
+    '''))
+    app = terminal.PtyApp([sys.executable, str(script)], rows=5, cols=60)
+    try:
+        app.wait_quiet(patience=5)
+        app.send(keys.sequence(["Esc", "Ctrl-T"]))
+        app.wait_quiet(patience=5)
+        seen = eval(app.text().strip().splitlines()[-1])
+    finally:
+        app.stop()
+    assert [hex_ for hex_, _gap in seen] == ["1b", "14"], "two reads, not one ESC+key burst"
+    assert seen[1][1] >= terminal.ESC_SETTLE - 0.05
