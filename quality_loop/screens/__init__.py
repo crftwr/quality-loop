@@ -77,11 +77,14 @@ class Terminal:
 
 def write_manifest(path: pathlib.Path, screens: dict, *, fixtures: pathlib.Path,
                    origin: str, python: str, state: pathlib.Path,
-                   evidence: dict | None = None) -> pathlib.Path:
+                   evidence: dict | None = None, apps: dict | None = None,
+                   record: pathlib.Path | None = None) -> pathlib.Path:
     """The declarations, made absolute, for the operator's tools to read.
 
     ``evidence`` is ``{name: {"argv": [...], "help": "..."}}``: the product's
     evidence commands, run by the operator's MCP server and nothing else.
+    ``apps`` (from `quality_loop.drive.manifest_entries`) are the apps its
+    live check may drive, and ``record`` where those steps are written.
     """
     entries = {}
     for name, screen in screens.items():
@@ -91,9 +94,11 @@ def write_manifest(path: pathlib.Path, screens: dict, *, fixtures: pathlib.Path,
         else:
             entry["script"] = str((pathlib.Path(fixtures) / screen.script).resolve())
         entries[name] = entry
-    path.write_text(json.dumps({"screens": entries, "python": python,
-                                "state": str(state), "evidence": evidence or {}},
-                               indent=2), encoding="utf-8")
+    manifest = {"screens": entries, "python": python, "state": str(state),
+                "evidence": evidence or {}}
+    if apps:
+        manifest.update(apps=apps, record=str(record))
+    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return path
 
 

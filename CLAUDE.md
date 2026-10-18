@@ -2,10 +2,12 @@
 
 ## What this is
 
-A harness that measures what an agent-facing product teaches. A **room**
-(an isolated Claude Code session given only the product's bundle) does a
-real task, and an **operator** (a second session) reports the problems, each
-with a severity and evidence. There is no verdict. Start with
+A harness that measures what a product teaches - its skill and tools, or its
+manual and UI. A **room** (an isolated Claude Code session given only what
+the product gives its users) does a real task, and an **operator** (a second
+session) reports the problems, each with a severity and evidence. There is no
+verdict. A **conductor** (a Claude Code session in the product's repository,
+with the skill `quality-loop init` installs) runs the loop with a person. Start with
 [docs/concepts.md](docs/concepts.md). The design discussion is
 [crftwr/keyhac#205](https://github.com/crftwr/keyhac/issues/205).
 
@@ -27,18 +29,24 @@ XeFM (planned). Both live as sibling checkouts (`../keyhac`, `../xefm`).
 - **Comments that record a paid-for lesson are load-bearing.** "The first
   real run was refused every write" is the reason the code looks the way it
   does. Keep them, and add one when a run teaches something new.
-- **No runtime dependencies.** The standard library only.
+- **No runtime dependencies.** The standard library only. The one exception
+  is the optional `tui` extra (`pyte`), imported only to drive a terminal app.
+- **The conductor's skill is product text.** `quality_loop/skill/` is copied
+  verbatim into products by `quality-loop init`; its rules on what never
+  reaches a room or an operator are load-bearing. Anything it describes that
+  must be guaranteed belongs in code here.
 - **After a change to the run's path** (operator, runner, MCP server,
   OPERATOR.md, screens), run the toy:
-  `.venv/bin/python examples/toy/run.py`. Unit tests have not caught what
+  `.venv/bin/python examples/toy/run.py`; after a change to `drive/` or the
+  live check, `examples/tui/run.py` too. Unit tests have not caught what
   only a real `claude` shows.
 - **Compatibility.** Until 1.0.0, breaking changes can happen in any
   release. From 1.0.0, compatibility is kept outside major releases as a
   rule. quality-loop is a developer tool rather than an end-user product, so
   an exception is judged case by case. Either way, downstream pins
   `quality-loop>=X.Y.Z`, and Keyhac's `qa/` uses the Adapter API,
-  `screens.Page/Terminal`, `standin.StandIn/Watch`, `session.Session` and
-  `audit.Policy`. Check `../keyhac/qa/run.py` (and XeFM's adapter once there is
+  `screens.Page/Terminal`, `standin.StandIn/Watch`, `session.Session`,
+  `audit.Policy`, the CLI and `qa/quality-loop.toml`. Check `../keyhac/qa/run.py` (and XeFM's adapter once there is
   one) before changing any of those. Say in the release note what a downstream
   adapter must change.
 - **Docs move with the code.** `docs/` describes the current behaviour. A
