@@ -128,6 +128,24 @@ def test_a_report_is_read_the_way_a_loop_needs_it():
     assert any("no id" in m for m in malformed) and any("no evidence" in m for m in malformed)
 
 
+def test_a_field_continued_as_a_nested_list_is_kept():
+    problems, malformed = report.parse(
+        "### [medium] Defaults pasted in\n"
+        "- **Id:** `extend-default`\n"
+        "- **Kind:** product\n"
+        "- **Evidence:**\n"
+        "  - 66 new lines in a 14-line file\n"
+        "  - config.md says to copy the defaults\n"
+        "- **Where it would be fixed:** config.md\n"
+        "\n"
+        "  An indented paragraph after a blank line is free text.\n")
+    assert not malformed
+    assert problems[0].evidence == ("- 66 new lines in a 14-line file\n"
+                                    "- config.md says to copy the defaults")
+    assert problems[0].where == "config.md"
+    assert "indented paragraph" in problems[0].detail
+
+
 def test_findings_concatenate_and_count_most_severe_first(tmp_path):
     path = report.write_findings(tmp_path, [
         ("11_f1", "F1 off", REPORT),

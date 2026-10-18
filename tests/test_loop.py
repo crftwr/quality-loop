@@ -401,12 +401,14 @@ def test_an_upgrade_leaves_a_hand_edited_skill_alone(tmp_path):
 
 
 def test_the_command_found_is_relative_inside_the_checkout(tmp_path, monkeypatch):
-    bin_dir = tmp_path / ".venv" / "bin"
+    # The venv's own layout: Scripts/quality-loop.exe on Windows.
+    bin_dir = tmp_path / ".venv" / ("Scripts" if os.name == "nt" else "bin")
     bin_dir.mkdir(parents=True)
-    (bin_dir / "quality-loop").write_text("")
+    script = "quality-loop.exe" if os.name == "nt" else "quality-loop"
+    (bin_dir / script).write_text("")
     monkeypatch.setattr(sys, "executable", str(bin_dir / "python"))
     monkeypatch.setattr(install.shutil, "which", lambda _name: None)
-    assert install.command_for(tmp_path) == ".venv/bin/quality-loop"
+    assert install.command_for(tmp_path) == (bin_dir / script).relative_to(tmp_path).as_posix()
     assert install.commands_for(tmp_path) == {
         "command": ".venv/bin/quality-loop",
         "command_windows": ".venv/Scripts/quality-loop.exe"}
