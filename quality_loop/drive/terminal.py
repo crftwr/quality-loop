@@ -31,6 +31,14 @@ class TerminalError(Exception):
     pass
 
 
+#: Seconds after a lone Esc before the next key. A terminal app cannot tell
+#: Esc followed quickly by a key from Alt+that key: it waits a moment (PuiKit
+#: 0.1s, ncurses ESCDELAY) for the rest of a sequence. The first XeFM live
+#: check sent Esc then Ctrl-T 20ms apart, and the command palette never
+#: opened - it had arrived as Alt-Ctrl-T.
+ESC_SETTLE = 0.3
+
+
 def _pyte():
     try:
         import pyte
@@ -68,8 +76,11 @@ class PtyApp:
         # The app's answers to queries (cursor position, device attributes)
         # go back down the pty, or a curses app that asks waits forever.
         self.screen.write_process_input = lambda data: self._write(data.encode("utf-8"))
-        environment = dict(os.environ, **(env or {}), TERM="xterm-256color",
-                           LINES=str(rows), COLUMNS=str(cols))
+        # ESCDELAY: how long ncurses waits after an ESC to see whether a
+        # sequence follows - a second by default. Short, so a lone Esc is an
+        # Esc soon enough for ESC_SETTLE below to cover it.
+        environment = {"ESCDELAY": "25", **os.environ, **(env or {}),
+                       "TERM": "xterm-256color", "LINES": str(rows), "COLUMNS": str(cols)}
         self.process = subprocess.Popen(
             argv, stdin=slave, stdout=slave, stderr=slave, cwd=cwd, env=environment,
             start_new_session=True, close_fds=True)
@@ -108,6 +119,8 @@ class PtyApp:
                 self._write(item.text.encode("utf-8"))
             else:
                 self._write(keynames.terminal_bytes(item))
+                if item.name == "Esc" and not item.mods:
+                    time.sleep(ESC_SETTLE)
             time.sleep(0.02)
         self._sent = time.monotonic()
 

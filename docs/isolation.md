@@ -185,9 +185,10 @@ never edits the harness to make a finding go away.
   Such a tool is the product's interface, and what it hands back is the
   product's to answer for.
 - **Evidence tools are trusted to only read.** Nothing enforces it.
-- **Windows** screen and key backends (Edge, Windows Terminal,
-  `EnumWindows`, `SendInput`, the screenshot) have not yet been run on a
-  Windows machine. Terminal apps are not driven on Windows yet (no ConPTY).
+- **Desktop apps** (`drive.DesktopApp`: `CGEventPost` and `SendInput`, the
+  focus check, the screenshot) are unit-tested only, on both OSes. The
+  screen backends (Safari and Terminal, Edge and Windows Terminal) have run
+  on both. Terminal apps are not driven on Windows yet (no ConPTY).
 - **The live check runs before collection.** Anything the app writes into a
   watched directory during it is collected with what the room made.
 - **Isolation rests on Claude Code's flags** (`--restricted`,

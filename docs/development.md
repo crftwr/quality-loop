@@ -67,8 +67,10 @@ tests/            fake_claude.py stands in for `claude` on the runner's whole pa
   shows: a permission rule spelled wrong, a file outside what the operator may
   read.
 
-The Windows backends are unit-tested only, pending a run on a Windows machine.
-The fake `claude` is a shell script, so the whole-run tests are skipped there.
+The screen backends have run live on both OSes. The desktop-app key and
+screenshot backends (`drive/_mac.py`, `drive/_windows.py`) are unit-tested
+only. On Windows the fake `claude` (a shell script) and the pty backend are
+skipped, so the whole-run and terminal-app tests run on macOS and Linux.
 
 ## Conventions
 
