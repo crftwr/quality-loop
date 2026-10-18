@@ -35,6 +35,16 @@ reads it unasked, and it tells such a session to say so and stop.
 
 **The transcript is written outside the room** and moved in at the end. One
 room, left with its own log in reach, grepped it to reconstruct the task.
+For the same reason the run's own records - `run.log`, `status.json`, each
+room's `<room>.log`, the operators' directories, the other rooms - live in the
+run's directory beside the rooms, never inside one, and a room that reaches
+into that directory is a breach (below).
+
+**A room that drives the app** (a human-facing product's `room_apps`) gets one
+more MCP server, `app`, holding the app tools and nothing else. Its steps are
+recorded in a private directory while it runs and moved into its evidence
+afterwards. The app's own data stays where the adapter redirected it: the
+room reaches it only through the app.
 
 ## The audit
 
@@ -50,11 +60,15 @@ flag can enforce:
 - **Forbidden paths**: the installed package, the installed app, the user's
   set-aside files. **Other authors' files** in a directory the room may write
   to.
+- **The run's own directory**, outside the room: its log, its status, a
+  sibling room, an operator's notes.
 - **Every git call**: refused when git found no repository, a breach otherwise.
 - **The init event**:
   - Bash present (when the room should have none) means `--restricted` did not
     take effect.
-  - A checkout skill visible means the scoring key leaked.
+  - A checkout skill visible means the scoring key leaked. The conductor's
+    skill (`quality-loop`) counts as one for every product: it knows the
+    scenarios.
   - A required MCP server not connected means the room measured the outage.
 - **The canary phrase** in the room's reply.
 
@@ -71,7 +85,7 @@ must not run anything the product did not declare.
 | | |
 |---|---|
 | `--restricted --tools Read,Glob,Grep,Write,Edit` | No Bash. Claude Code lets read-only commands through regardless of the allow list. The first real operator ran `cd room; ls -la; cat QUESTIONS.md; ...`, and `cat` reads anywhere on the machine, while the file tools are confined. |
-| One MCP server: quality-loop's own (`python -m quality_loop.mcp`) | Its tools are `screen_list`, `screen_open(name)`, `screen_close(id)` and `evidence(tool, args)`. They are the operator's only way to act. |
+| One MCP server: quality-loop's own (`python -m quality_loop.mcp`) | Its tools are `screen_list`, `screen_open(name)`, `screen_close(id)` and `evidence(tool, args)`, and in a live check the `app_*` tools. They are the operator's only way to act. |
 | Never the product's MCP | Checking the screen through the product under test is circular. A broken `list_windows` would hide a failed setup and be blamed on the product. |
 | Writes: `Edit(//<its directory>/**)` and `Edit(//<room>/REPORT.md)` | Edit rules govern Write too. Absolute paths take Claude Code's `//` spelling, because a single `/` is relative to the settings file, and the first real run was refused every write. |
 | `--session-id` in phase 1, `--resume` in phase 2 | The agent that judges the run is the one that set it up. |
@@ -79,7 +93,16 @@ must not run anything the product did not declare.
 
 **Phase 1 cannot change the room.** Every file in the room is hashed before
 and after. A changed, added or removed byte cancels the room. `TASK.md` above
-all has to reach the room exactly as the runner wrote it.
+all has to reach the room exactly as the runner wrote it. The live check is
+held to the same, except for its own record under `evidence/live/`.
+
+**Apps by name only.** `app_start` takes a name from the adapter's
+declarations. The operator chooses keys, never a command line.
+
+**Known problems as data.** The operator is handed ids and titles of
+problems earlier runs reported, in `known.md` in its own directory, and
+nothing else: no status, no expectation. "Check whether it is fixed now"
+biases a judge toward "fixed".
 
 **Screens by name only.** `screen_open` takes a name from the adapter's
 declarations, never a path, URL or script. Terminal scripts run from a copy.
@@ -111,6 +134,47 @@ Runs happen on the user's own machine, with their own files:
   Terminal window's own tty processes are ended first: otherwise Terminal
   answers a close with a confirmation sheet and the window stays.
 
+## Synthetic input
+
+A desktop app is driven with keys the OS delivers to whatever window is in
+front:
+
+- **The frontmost window is checked before every key.** If it is not the
+  app's - the person at the machine clicked somewhere - nothing more is sent
+  and the step is refused. Input never lands in another application.
+- **Text is injected as Unicode** (`KEYEVENTF_UNICODE`,
+  `CGEventKeyboardSetUnicodeString`), so neither the keyboard layout (JIS or
+  US) nor an input method changes it. Shortcuts go as virtual keys.
+- **Key remappers** (Keyhac, Karabiner, AutoHotkey, ...) rewrite synthetic
+  keys too. A running one is warned about before the first key. For Keyhac's
+  own QA it is the product.
+- **Permissions** belong to the application quality-loop is started from:
+  on macOS, Accessibility (posting keys, reading other apps' windows) and
+  Screen Recording (screenshots). On Windows, UIPI stops input to an
+  elevated process's window; the step says so.
+- Screens and keys share one desktop, so rooms that use them never run side
+  by side.
+
+A terminal app in a pty needs none of this: its keys go down its own
+terminal.
+
+## The conductor
+
+The conductor can read everything: the checkout, past findings, the source.
+What keeps that out of the tiers below:
+
+- It starts runs only with `quality-loop run`, by scenario name. The runner
+  copies the Prompt into TASK.md; nothing the conductor writes reaches a room.
+- It reaches the operator only through `--known`, which the runner reduces to
+  ids and titles for the rooms they concern.
+- It cannot widen what a room or an operator may do: their flags and
+  permission lists are the runner's.
+- Its own skill, if a room could see it, is caught by the audit.
+
+What is instruction rather than code is in its skill: it never writes in the
+rooms directory, never changes a Must line the person has not accepted, and
+never edits the harness to make a finding go away.
+
 ## Known limits
 
 - **The room knows where it is.** A room inside the checkout can see from its
@@ -121,5 +185,12 @@ Runs happen on the user's own machine, with their own files:
   Such a tool is the product's interface, and what it hands back is the
   product's to answer for.
 - **Evidence tools are trusted to only read.** Nothing enforces it.
-- **Windows** screen backends (Edge, Windows Terminal, `EnumWindows`) have not
-  yet been run on a Windows machine.
+- **Windows** screen and key backends (Edge, Windows Terminal,
+  `EnumWindows`, `SendInput`, the screenshot) have not yet been run on a
+  Windows machine. Terminal apps are not driven on Windows yet (no ConPTY).
+- **The live check runs before collection.** Anything the app writes into a
+  watched directory during it is collected with what the room made.
+- **Isolation rests on Claude Code's flags** (`--restricted`,
+  `--strict-mcp-config`, the permission list under `dontAsk`) and on its
+  transcript format for the audit. Another agent would need isolation at the
+  OS level - a container, a sandbox, a separate user.

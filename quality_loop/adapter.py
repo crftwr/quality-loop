@@ -33,6 +33,20 @@ class Adapter:
             arguments of its choosing and no shell.
         evidence_help: One paragraph on what those tools answer.
         python: The interpreter the operator's CLIs run under.
+        bundle_place: The directory the bundle goes under in a room:
+            ``skills`` for an agent-facing skill, ``docs`` for a manual.
+        apps: ``{name: drive.TerminalApp | drive.DesktopApp}`` - the product's
+            app, launched by the framework (see `quality_loop.drive`). The
+            operator drives them in a scenario's live check.
+        room_apps: Names from ``apps`` the room itself may drive, for a
+            human-facing product whose UI is the surface under test. Empty
+            for an agent-facing one: there, driving the app is for checking.
+        default_variant: What the variant ``""`` is called on the command
+            line (``--variant``), e.g. Keyhac's ``template`` config.
+        parallel: How many rooms may run at once. 1, the default, is one
+            after another, exactly as before parallel runs existed.
+        resources: ``{resource: capacity}`` - what rooms share, and how many
+            may hold each at once: a desktop's focus, the user's home.
     """
     name = "product"
     version = "0"
@@ -45,6 +59,12 @@ class Adapter:
     evidence: dict = {}
     evidence_help = ""
     python = sys.executable
+    bundle_place = "skills"
+    apps: dict = {}
+    room_apps: tuple = ()
+    default_variant = ""
+    parallel = 1
+    resources: dict = {}
 
     def bundle(self) -> pathlib.Path:
         """The surface under test - a zip or a directory - built for this run."""
@@ -86,3 +106,19 @@ class Adapter:
     def alive(self) -> bool:
         """Whether the product is still answering, asked on the heartbeat."""
         return True
+
+    def needs(self, case: scenario.Scenario, variant: str) -> set[str]:
+        """The resources one room holds while it runs. The default is every
+        declared resource, so declaring a resource without saying who needs
+        it never lets two rooms share it."""
+        return set(self.resources)
+
+    def product_for(self, room: pathlib.Path):
+        """A context manager for one room: a product instance of its own, for
+        a product that can run one per room. None uses ``product()``'s."""
+        return None
+
+    def restore(self) -> list[str]:
+        """Put back what a run that could not unwind left set aside - the
+        stand-in's marker. One line per thing done."""
+        raise NotImplementedError("this adapter does not say how to restore")

@@ -40,7 +40,7 @@ evidence about what you were given.
 
 #: What the room is told to write into, already there so that it appends.
 QUESTIONS = """\
-# What the skill did not tell me
+# What I was not told
 
 One section per thing you had to guess, in the form RULES.md gives. If nothing
 had to be guessed, leave it as it is.
@@ -68,7 +68,7 @@ def check_location(room: pathlib.Path, rooms: pathlib.Path,
 
 def build(room: pathlib.Path, *, prompt: str, rules: str, bundle: pathlib.Path,
           skill_name: str, rooms: pathlib.Path,
-          checkout: pathlib.Path | None = None) -> pathlib.Path:
+          checkout: pathlib.Path | None = None, place: str = "skills") -> pathlib.Path:
     """Build a room and return its path.
 
     Args:
@@ -78,10 +78,12 @@ def build(room: pathlib.Path, *, prompt: str, rules: str, bundle: pathlib.Path,
             leaks into a room.
         rules: RULES.md's text: what the room may and may not read.
         bundle: The surface under test: a zip (as a user downloads it) or a
-            directory. Unpacked under ``skills/<skill_name>``.
-        skill_name: The skill's directory name inside the room.
+            directory. Unpacked under ``<place>/<skill_name>``.
+        skill_name: The bundle's directory name inside the room.
         rooms: The directory rooms are built under.
         checkout: The product's repository, when the rooms are inside it.
+        place: The directory the bundle goes under: ``skills`` for a skill,
+            ``docs`` for a human-facing product's manual.
     """
     room = pathlib.Path(room)
     check_location(room, rooms, checkout)
@@ -89,7 +91,7 @@ def build(room: pathlib.Path, *, prompt: str, rules: str, bundle: pathlib.Path,
         raise RoomError(f"{room} is not empty - a room starts with nothing in it")
     room.mkdir(parents=True, exist_ok=True)
 
-    target = room / "skills" / skill_name
+    target = room / place / skill_name
     bundle = pathlib.Path(bundle)
     if bundle.is_dir():
         shutil.copytree(bundle, target, ignore=shutil.ignore_patterns(

@@ -2,13 +2,19 @@
 
 An adapter is the product's half of a run. Subclass `quality_loop.adapter.Adapter`,
 fill in what is the product's own, and hand an instance to
-`quality_loop.runner.run`. Everything else is the runner's: building rooms,
-isolating sessions, the stand-in, screens, the operator, the audit and the
-findings.
+`quality_loop.runner.run` (or name it in `qa/quality-loop.toml` for the
+command line). Everything else is the runner's: building rooms, isolating
+sessions, the stand-in, screens, driving the app, the operator, the audit and
+the findings.
 
-`examples/toy/run.py` is a complete adapter in about 100 lines.
-[Keyhac's `qa/run.py`](https://github.com/crftwr/keyhac/blob/main/qa/run.py)
-is a real one: a product with a daemon, an MCP endpoint and screens.
+`examples/toy/run.py` is a complete adapter for a skill in about 100 lines,
+and `examples/tui/run.py` one for a terminal app and its manual, with no MCP
+and no evidence tools. [Keyhac's `qa/run.py`](https://github.com/crftwr/keyhac/blob/main/qa/run.py)
+is a real one: a product with a daemon, an MCP endpoint, screens and evidence
+tools of its own.
+
+`qa/quality-loop.toml` names the adapter for the command line
+(`adapter = "qa/run.py:Product"`); see [Running the loop](running.md).
 
 ```python
 from quality_loop import adapter, audit, runner, screens, session, standin
@@ -63,6 +69,76 @@ A product whose surface is a CLI grants a narrowed Bash with `tools=[...,
 "Bash"]` and `allow=["Bash(product ext:*)", ...]`. Read
 [Isolation](isolation.md) first: Claude Code lets read-only shell commands
 through whatever the allow list says.
+
+## The least a product needs
+
+A product with no skill, no MCP and no evidence tools is measured against its
+manual, with the framework driving its app:
+
+```python
+class Jot(adapter.Adapter):
+    bundle_place = "docs"                    # the room gets docs/<skill_name>
+    room_apps = ("jot",)                     # the UI is the surface: the room drives it
+    apps = {"jot": drive.TerminalApp([sys.executable, "jot.py"], rows=20, cols=60,
+                                     env={"JOT_HOME": str(HOME)})}
+
+    def bundle(self): return DOCS
+    def rules(self): return RULES
+    def session(self, room): return session.Session(allow=["Read", "Glob", "Grep"])
+    def stand_in(self, case, variant, room):
+        return standin.StandIn(home=HOME, marker=ASIDE / "stand-in",
+                               fixtures={"notes.txt": FIXTURE}, evidence=room / "evidence")
+```
+
+What the product has to allow is in [Concepts](concepts.md#what-a-product-has-to-give):
+a launch command, a redirected home, and for a desktop app a window title.
+
+## Apps
+
+**`apps`** declares the product's app by name, for the framework to drive
+(`quality_loop.drive`):
+
+- **`drive.TerminalApp(argv, rows=40, cols=120, env={}, cwd=None)`** runs
+  under a pseudo-terminal of that size, with a terminal emulator kept in
+  step, so its screen is read as text and keys go in as an xterm sends them.
+  Nothing on the desktop, nothing the person at the machine can disturb.
+  Needs `quality-loop[tui]`; macOS and Linux.
+- **`drive.DesktopApp(argv, title, env={}, cwd=None, patience=20, quit=None)`**
+  is launched and recognised by its window title, driven with synthetic keys
+  (`CGEventPost` on macOS, `SendInput` on Windows) and read by screenshot.
+  Before every key the frontmost window is checked, and a key that would land
+  elsewhere is not sent. Text goes in as Unicode, unaffected by the layout
+  and the IME; shortcuts as virtual keys. `quit` is the keys that quit it;
+  otherwise the process is terminated.
+
+Who drives them:
+
+- **The operator**, in a scenario's **Live check**, after the room has
+  finished and before the user's files go back. The steps land in the room's
+  `evidence/live/`.
+- **The room**, for the names in **`room_apps`**: a human-facing product,
+  whose UI is the surface under test. The room's session gets one more MCP
+  server, `app`, with the app tools only; its steps are kept outside the room
+  while it runs and land in `evidence/app/` afterwards.
+
+Every step is a line of `steps.jsonl`: the keys, the agent's stated intent,
+how long the screen took to settle, the screen file it left, and the event
+log's lines since the step before. A key remapper running (Keyhac,
+Karabiner, AutoHotkey) is warned about: it rewrites synthetic keys too.
+
+**The event log.** Every app is started with `QUALITY_LOOP_EVENTS=<path>`. A
+product that writes JSON lines there - one object per fact, at its own API
+boundary - is at level 1:
+
+```json
+{"kind": "prompt", "text": "Delete 3 files?"}
+{"kind": "message", "text": "Saved"}
+{"kind": "exception", "type": "KeyError", "where": "ext/trip.py:12"}
+{"kind": "launched", "argv": ["open", "/tmp/x.pdf"]}
+```
+
+The kinds are the product's own; these are the useful ones. Write nothing
+when the variable is unset.
 
 ## Optional
 
@@ -120,6 +196,15 @@ standin.StandIn(
 **`runs(cases, named)`** returns `(scenario, variant)` pairs. The default is
 one room per scenario. Keyhac runs a config-editing scenario on each fixture
 config, and leaves a scenario with `needs` out unless it was named.
+**`default_variant`** is what the unnamed variant `""` is called on the
+command line, so `--variant template` can pick it.
+
+**`restore()`** puts back what a run that could not unwind left set aside,
+for `quality-loop restore`. Usually one call to `standin.restore`.
+
+**`parallel`, `resources`, `needs(case, variant)`, `product_for(room)`** let
+rooms run side by side. Declaring none of them keeps one room at a time; see
+[Running the loop](running.md#parallel-runs).
 
 ## Screens
 
@@ -167,8 +252,9 @@ verbatim.
   `Cmd-S`" beats a stream of key-down/key-up edges the operator has to
   interpret. A tool that answers the question directly is cited correctly.
 - **Read the run's evidence.** That means `room/evidence/`,
-  `room/transcript.jsonl` and the screen events. Never read the live machine,
-  which has already been put back.
+  `room/transcript.jsonl`, the screen events and the live check's record.
+  Never read the live machine, which has already been put back. Driving the
+  live app is the live check's job, not an evidence tool's.
 - **Write ground truth out by hand.** A check that reads its expectations from
   the page it is checking would agree with any page, including a broken one.
 - Start with `--help`. The operator is told to call each tool with `--help`
@@ -180,17 +266,26 @@ answers what the focused application received.
 
 ## Running it
 
+```
+quality-loop run 11 --variant short          # in the background; prints the run's id
+quality-loop run 11 --foreground             # attached
+```
+
+or from Python:
+
 ```python
 from quality_loop import runner
-findings = runner.run(Product(), names=["11"], model=None, operator_model=None)
+findings = runner.run(Product(), names=["11"], model=None, operator_model=None,
+                      variants=None, parallel=None, known=None)
 ```
 
 `names` picks scenarios by number or name. None means every scenario the
 adapter's `runs()` keeps. SIGTERM unwinds like Ctrl-C, so the stand-in still
 puts the user's files back. The result is `FINDINGS.md` and `findings.json` in
-`rooms/<version>-<time>/`. Each room's directory sits beside them, with
-`<room>.operator/` holding the operator's notes and transcripts.
+`rooms/<version>-<time>/`, beside `run.log` and `status.json`. Each room's
+directory sits beside them, with `<room>.operator/` holding the operator's
+notes and transcripts and `<room>.log` the room's own lines.
 
 Give the product a make target (Keyhac: `make qa CASE=11 CONFIGS=short`).
-Runs are started by a person, never by a hook or CI: they cost model time,
-swap the user's files, and open windows.
+Runs are authorized by a person, never started by a hook or CI: they cost
+model time, swap the user's files, open windows and send keys.

@@ -17,9 +17,12 @@ Free text under the fields, as long as it needs to be.
 
 There is no verdict. A human reads the report and decides what to do with
 it. **Id**, **Where it would be fixed** and **How a fix is confirmed** are
-there so the report can also feed the next step: a later run says of each id
-whether it is fixed, still there, or new, and a fix is checked against the
-same evidence the problem was found with.
+there so the report can also feed the next step. Runs are not deterministic -
+their use is discovery, each run surfacing something new - so the id is
+mainly how the same problem is recognised across runs: de-duplicated, seen
+to be gone, seen to come back. **Reproduce** (optional) points at the steps
+in the record - the transcript, the live check's ``steps.jsonl`` - that a
+later agent follows to see it again.
 
 `parse` is lenient about everything but what a loop depends on: a problem
 with no severity, an unknown severity or kind, or no id is reported as
@@ -58,6 +61,7 @@ FIELDS = {
     "evidence": "Evidence",
     "where": "Where it would be fixed",
     "confirm": "How a fix is confirmed",
+    "reproduce": "Reproduce",
 }
 
 _PROBLEM = re.compile(r"^### +\[(?P<severity>[^\]]+)\] +(?P<title>.+?)\s*$")
@@ -74,8 +78,10 @@ class Problem:
     evidence: str = ""
     where: str = ""
     confirm: str = ""
+    reproduce: str = ""
     detail: str = ""
     room: str = ""
+    run: str = ""
 
     def problems(self) -> list[str]:
         """What is wrong with this entry as a loop would read it."""
@@ -163,6 +169,8 @@ def findings(reports: list[tuple[str, str, str]]) -> tuple[str, list[dict]]:
 def write_findings(directory: pathlib.Path, reports: list[tuple[str, str, str]]) -> pathlib.Path:
     """FINDINGS.md and findings.json in ``directory``."""
     text, machine = findings(reports)
+    for entry in machine:
+        entry["run"] = directory.name
     (directory / "FINDINGS.md").write_text(text, encoding="utf-8")
     (directory / "findings.json").write_text(json.dumps(machine, indent=2,
                                                         ensure_ascii=False),

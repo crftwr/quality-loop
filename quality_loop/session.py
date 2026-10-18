@@ -38,6 +38,8 @@ import threading
 import time
 from typing import Callable
 
+from quality_loop import processes
+
 #: The sentence a room is opened with, and the whole of what it is told.
 PROMPT = "Read RULES.md, then do TASK.md."
 
@@ -147,7 +149,8 @@ class Session:
 
     def run(self, room: pathlib.Path, on_event: Callable[[dict], None] | None = None,
             alive: Callable[[], bool] | None = None, heartbeat: float = 20.0,
-            say: Callable[[str], None] = print) -> "Run":
+            say: Callable[[str], None] = print,
+            on_quiet: Callable[[float], None] | None = None) -> "Run":
         """Drive the room to completion, keeping the transcript in it.
 
         The transcript is written outside the room and moved in at the end:
@@ -158,6 +161,9 @@ class Session:
         answering. Two misses in a row end the run: a room that cannot reach
         the product measures the outage, and one went on for twenty-three
         minutes after its product had died.
+
+        ``on_quiet`` is told, on each heartbeat, how long the session has
+        been quiet - for a status file a watcher reads.
         """
         room = pathlib.Path(room)
         transcript = (pathlib.Path(tempfile.gettempdir())
@@ -169,9 +175,11 @@ class Session:
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                   text=True, encoding="utf-8", bufsize=1,
                                   env=self.environment(room)) as session, \
+                    processes.tracked(session), \
                     transcript.open("w", encoding="utf-8") as log:
                 beat = threading.Thread(target=_heartbeat, daemon=True,
-                                        args=(session, clock, alive, heartbeat, say, result))
+                                        args=(session, clock, alive, heartbeat, say, result,
+                                              on_quiet))
                 beat.start()
                 try:
                     for line in session.stdout:
@@ -237,7 +245,7 @@ class _Clock:
         return f"{seconds // 60:>2}:{seconds % 60:02d}"
 
 
-def _heartbeat(session, clock, alive, every, say, result) -> None:
+def _heartbeat(session, clock, alive, every, say, result, on_quiet=None) -> None:
     """Say the run is alive while it thinks, and end it when the product is not.
 
     A model between tool calls writes nothing, so a long turn and a hung
@@ -251,6 +259,8 @@ def _heartbeat(session, clock, alive, every, say, result) -> None:
         if quiet < every:
             continue
         say(f"  [{clock}] … thinking ({int(quiet)}s since the last step)")
+        if on_quiet:
+            on_quiet(quiet)
         clock.touch()
         if alive is None:
             continue

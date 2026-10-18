@@ -4,6 +4,7 @@
 make test                         # every test that needs no window and no model
 QUALITY_LOOP_LIVE=1 make test     # also opens real windows on this OS
 .venv/bin/python examples/toy/run.py   # a real run, end to end, a few cents
+.venv/bin/python examples/tui/run.py   # a terminal app and its manual, with a live check
 ```
 
 ## Layout
@@ -17,16 +18,24 @@ quality_loop/
   standin.py      fixtures in for the user's files, and back
   pages.py        fixture pages over HTTP, and their event record
   screens/        screens by name: the manifest, macOS and Windows backends
-  mcp.py          the operator's tools, as a stdio MCP server
-  operator.py     the operator's session, two phases
+  drive/          driving the app: key notation, a pty with pyte, OS keys and screenshots
+  mcp.py          quality-loop's tools, as a stdio MCP server: screens, evidence, apps
+  operator.py     the operator's session: phase 1, the live check, phase 2
   OPERATOR.md     the operator's instructions (package data)
   scenario.py     Markdown scenarios
   report.py       REPORT.md, FINDINGS.md, findings.json
   adapter.py      what a product supplies
-  runner.py       a run, per scenario
-  __main__.py     `python -m quality_loop screen ...`, for a person
-examples/toy/     a complete product and adapter, for an end-to-end run
-tests/
+  runner.py       a run: the queue, and per room the phases
+  progress.py     run.log and status.json
+  processes.py    the sessions running, so a cancel ends them all
+  compare.py      findings across runs: new, still there, gone, back
+  config.py       qa/quality-loop.toml, and loading the adapter it names
+  install.py      `quality-loop init`: the skill and the settings
+  skill/          the conductor's skill (package data)
+  cli.py          the `quality-loop` command
+examples/toy/     a skill and its adapter, for an end-to-end run
+examples/tui/     a terminal app, its manual and its adapter
+tests/            fake_claude.py stands in for `claude` on the runner's whole path
 ```
 
 ## Tests
@@ -43,21 +52,29 @@ tests/
   - the operator's command line, and phase 1's room check
   - scenario parsing and the leak check
   - report parsing
+  - the key notation, a terminal app driven in a pty, and the step record
+  - status.json, run.log and `watch`; comparing runs; `init` and `--upgrade`
+  - the queue: its limit, its resources, a failure, rooms that would share
+  - a whole run, side by side, detached and cancelled - with
+    `tests/fake_claude.py` standing in for `claude`
 - **Live tests** (`QUALITY_LOOP_LIVE=1`) open and close a real page and a real
   terminal on the OS they run on. On macOS they need Automation permission for
   Safari and Terminal. They leave nothing open, and a test that does is a bug.
 - **The toy run** is the integration test. It costs a few cents and a minute.
   Run it after any change to the operator, the runner, the MCP server or
-  OPERATOR.md. Changes to those have broken in ways only a real `claude`
+  OPERATOR.md, and the TUI example after a change to `drive/` or the live
+  check. Changes to those have broken in ways only a real `claude`
   shows: a permission rule spelled wrong, a file outside what the operator may
   read.
 
 The Windows backends are unit-tested only, pending a run on a Windows machine.
+The fake `claude` is a shell script, so the whole-run tests are skipped there.
 
 ## Conventions
 
 - **No runtime dependencies.** Everything is the standard library, including
-  the MCP server.
+  the MCP server. The one exception is the `tui` extra: `pyte`, a terminal
+  emulator, imported only when a terminal app is driven.
 - **Paid for, then written down.** A rule that exists because a run went
   wrong says so in a comment or docstring: what happened, and what it cost.
   That is what stops the next person from "simplifying" it away.
@@ -87,9 +104,11 @@ it.
 2. Set `__version__`, and commit "Releasing X.Y.Z".
 3. `make build` builds the sdist and the wheel, and runs `twine check --strict`.
 4. Install the wheel into a fresh venv and smoke-test it. Check that
-   `quality_loop.operator.INSTRUCTIONS` exists, and that `python -m
-   quality_loop.mcp` answers `initialize`. OPERATOR.md is package data, and a
-   wheel without it gives an operator with no instructions.
+   `quality_loop.operator.INSTRUCTIONS` exists, that `python -m
+   quality_loop.mcp` answers `initialize`, and that `quality-loop init` in an
+   empty directory writes `.claude/skills/quality-loop/` with its references.
+   OPERATOR.md and the skill are package data: a wheel without them gives an
+   operator with no instructions and a conductor with no skill.
 5. Run `git tag -a vX.Y.Z` and push `main` and the tag.
 6. `.venv/bin/python -m twine upload dist/quality_loop-X.Y.Z*`. A PyPI version
    can never be re-uploaded, so this comes after the tag is pushed.

@@ -60,6 +60,10 @@ The `## ` headings, in any order. Headings inside fenced code are ignored.
 - **Must** (required). The observable outcomes first, then what to read for.
   The operator checks each line against evidence.
 - **Must not**. What a run must not do.
+- **Live check**. What the operator should try on the real app once the room
+  has finished, written for the operator: "Open the extension's command and
+  check the list shows the three trip folders." Its presence is what asks
+  for a live check; the adapter must declare `apps`.
 
 ## What makes a scenario measure something
 
@@ -89,11 +93,27 @@ whose Prompt contains one of its own Must or Must not lines (20 characters or
 longer, whitespace-insensitive). That is the copy-paste one line too long. It
 cannot catch a paraphrase, so keep the two sections apart when you edit.
 
+**Pair every Must line with how it is checked** at the product's evidence
+level: a file diff or the screen at level 0, the event log at level 1, the
+product's own tools at level 2. A Must line nothing can check is a wish.
+
+## Scenarios from the docs
+
+For a human-facing product, the docs make claims a run can test: a key, a
+menu name, a setting, the result of a step. A **doc-driven scenario** takes
+one of them as a user's intent ("Rename a note") and lets the room find the
+way with only the manual, while the Live check verifies the claim itself on
+the app ("the key the manual gives for changing a note does change it").
+Together they cover "is what is written true" and "does what is not written
+trip people up".
+
 ## Checking scenarios without a run
 
-A product's own tests should parse every scenario and check what can be
-checked without a room. Keyhac's `tests/test_qa.py` does this: every
-scenario parses, every screen it names is declared, every staged file exists.
+`quality-loop check` parses every scenario, checks every declared screen's
+file exists, and warns about a backticked name in a Screen section that is
+not a declared screen. A product's own tests can check more: Keyhac's
+`tests/test_qa.py` checks that every staged file exists and every fixture
+config loads.
 
 ```python
 from quality_loop import scenario
