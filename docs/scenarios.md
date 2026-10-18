@@ -11,7 +11,7 @@ room is held to.
 +++
 title = "Stop F1 doing anything in VS Code"
 edits_config = true
-configs = ["template", "short", "grown"]
+config = "grown"
 +++
 
 ## Prompt
@@ -43,8 +43,8 @@ product, which receives the whole table as `Scenario.meta`. Keyhac uses:
 
 | Key | Meaning |
 |---|---|
-| `edits_config` | The task changes the user's config, so it runs on every fixture config. |
-| `configs` | Which fixture configs to run it on. |
+| `edits_config` | The task changes the user's config. |
+| `config` | Which fixture config stands in for the user's: `template`, `short` or `grown`. |
 | `staged` | `[[fixture, name], ...]` input files put on the Desktop. |
 | `needs` | A screen only the person running it can put up. The scenario is left out of a run of everything and runs when named. |
 

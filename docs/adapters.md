@@ -196,8 +196,9 @@ standin.StandIn(
   as `evidence/before/<name>` and `evidence/after/<name>`.
 
 **`runs(cases, named)`** returns `(scenario, variant)` pairs. The default is
-one room per scenario. Keyhac runs a config-editing scenario on each fixture
-config, and leaves a scenario with `needs` out unless it was named.
+one room per scenario. Keyhac leaves a scenario with `needs` out unless it was
+named. Variants are the product's own idea: whatever a room's label should
+carry besides the scenario's name.
 **`default_variant`** is what the unnamed variant `""` is called on the
 command line, so `--variant template` can pick it.
 
