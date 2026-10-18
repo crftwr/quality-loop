@@ -41,8 +41,8 @@ def test_the_operator_has_no_shell_and_only_quality_loop_s_server(op):
     assert "Write" not in allow and "Edit" not in allow
     assert "mcp__quality-loop" in allow
     writes = [rule for rule in allow if rule.startswith(("Write(", "Edit("))]
-    assert writes == [f"Edit(/{op.directory.resolve().as_posix()}/**)",
-                      f"Edit(/{(op.room.resolve() / 'REPORT.md').as_posix()})"]
+    assert writes == [f"Edit({operator.absolute(op.directory)}/**)",
+                      f"Edit({operator.absolute(op.room / 'REPORT.md')})"]
     assert all(rule.startswith("Edit(//") for rule in writes), "absolute: //"
     assert _value(command, "--permission-mode") == "dontAsk"
 
