@@ -103,6 +103,10 @@ def parse(text: str, room: str = "") -> tuple[list[Problem], list[str]]:
     problems: list[Problem] = []
     current: Problem | None = None
     detail: list[str] = []
+    #: The field the indented lines below it continue. The first Windows runs
+    #: had operators write `- **Evidence:**` with the evidence as a nested
+    #: list under it, and five findings came out "no evidence" that had it.
+    field_key: str | None = None
 
     def close():
         if current is not None:
@@ -115,6 +119,7 @@ def parse(text: str, room: str = "") -> tuple[list[Problem], list[str]]:
             current = Problem(severity=heading["severity"].strip().lower(),
                               title=heading["title"], room=room)
             detail = []
+            field_key = None
         elif current is not None and (field := _FIELD.match(line)) \
                 and field["label"].strip().lower() in by_label:
             value = field["value"].strip()
@@ -124,7 +129,12 @@ def parse(text: str, room: str = "") -> tuple[list[Problem], list[str]]:
             if key == "kind":
                 value = value.lower()
             setattr(current, key, value)
+            field_key = key
+        elif current is not None and field_key and line[:1].isspace() and line.strip():
+            before = getattr(current, field_key)
+            setattr(current, field_key, f"{before}\n{line.strip()}".strip())
         elif current is not None:
+            field_key = None
             detail.append(line)
     close()
     malformed = [f"{p.title}: {issue}" for p in problems for issue in p.problems()]

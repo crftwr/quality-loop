@@ -24,7 +24,9 @@ Free text: what happened, and why it matters.
 ```
 
 One `### [severity] title` heading per problem, most severe first, followed by
-the fields as `- **Label:** value` lines and then free text.
+the fields as `- **Label:** value` lines and then free text. A field may go on
+in indented lines below it, such as a nested list under `- **Evidence:**`;
+they are part of its value up to the next field or an unindented line.
 
 ## Severity
 
