@@ -55,7 +55,9 @@ only grows it.
   reports the same problem under the same id. Runs are not deterministic, so
   the id is first of all how findings are **de-duplicated across runs** -
   filed once, commented on when seen again - and how a problem that is gone,
-  or keeps coming back, is seen at all.
+  or keeps coming back, is seen at all. The id is the first code span on the
+  line, or else its first word; anything after it, such as "(known)", is a
+  note and not part of the id.
 - **Evidence** is what a tool answered, what the transcript shows, or a
   recorded live step and its screen, with where it is. A problem without
   evidence is malformed.

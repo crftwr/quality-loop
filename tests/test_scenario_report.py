@@ -146,6 +146,14 @@ def test_a_field_continued_as_a_nested_list_is_kept():
     assert "indented paragraph" in problems[0].detail
 
 
+@pytest.mark.parametrize("written", ["`dialog-gone` (known)", "dialog-gone (known)",
+                                     "`dialog-gone`", "dialog-gone"])
+def test_a_note_after_the_id_is_not_part_of_it(written):
+    problems, malformed = report.parse(
+        f"### [medium] Dialog\n- **Id:** {written}\n- **Evidence:** calls\n")
+    assert not malformed and problems[0].id == "dialog-gone"
+
+
 def test_findings_concatenate_and_count_most_severe_first(tmp_path):
     path = report.write_findings(tmp_path, [
         ("11_f1", "F1 off", REPORT),
