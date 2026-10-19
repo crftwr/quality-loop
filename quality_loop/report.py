@@ -125,7 +125,12 @@ def parse(text: str, room: str = "") -> tuple[list[Problem], list[str]]:
             value = field["value"].strip()
             key = by_label[field["label"].strip().lower()]
             if key == "id":
-                value = value.strip("`")
+                # The id is the first code span, or else the first word. The
+                # first Keyhac run with a known list had operators write
+                # "`dialog-gone` (known)", and the note became part of the id,
+                # so every known problem was counted as new.
+                code = re.match(r"`([^`]+)`", value)
+                value = code[1].strip() if code else (value.split() or [""])[0]
             if key == "kind":
                 value = value.lower()
             setattr(current, key, value)
