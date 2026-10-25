@@ -385,22 +385,24 @@ def _one(adapter, case, variant, here: pathlib.Path, bundle, model, operator_mod
     served = pages.Pages(adapter.fixtures) if adapter.fixtures else contextlib.nullcontext()
     own_product = adapter.product_for(built) or contextlib.nullcontext()
     op = None
+    backend = None
     try:
         with own_product, stand_in, served as site:
+            backend = adapter.screen_backend()
             manifest = screens.write_manifest(
                 private / "manifest.json", adapter.screens,
                 fixtures=adapter.fixtures or adapter.checkout,
                 origin=site.origin if site else "", python=adapter.python,
                 state=directory, evidence=adapter.evidence,
                 apps=drive.manifest_entries(adapter.apps) if live else None,
-                record=evidence / "live")
+                record=evidence / "live", backend=backend)
             op = operator.Operator(
                 room=built, directory=directory, scenario=case.path,
                 checkout=adapter.checkout,
                 evidence_help=adapter.evidence_help, manifest=manifest,
                 python=adapter.python, model=operator_model, known=known)
             say("  operator: phase 1 - the screen")
-            op.phase_one(sys.platform, say=say)
+            op.phase_one(adapter.platform(), say=say)
             _checkpoint()
             status.phase(label, "room")
             say("  room:    running")
@@ -465,7 +467,9 @@ def _one(adapter, case, variant, here: pathlib.Path, bundle, model, operator_mod
     finally:
         if op is not None:
             status.cost(label, op.cost)
-        closed = screens.close_all(directory) if directory.exists() else []
+        closed = (screens.close_all(directory, screens.load_backend(backend)
+                                    if backend else None)
+                  if directory.exists() else [])
         if closed:
             say(f"  closed:  {', '.join(closed)} (left open by the operator)")
         shutil.rmtree(private, ignore_errors=True)

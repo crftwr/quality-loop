@@ -165,3 +165,46 @@ def test_live_a_terminal_opens_with_its_title_and_closes(tmp_path, monkeypatch):
     monkeypatch.setenv(screens.MANIFEST, str(path))
     record = screens.open_screen("hello")
     screens.close_screen(record["id"])
+
+
+BACKEND = '''
+calls = []
+settings = {}
+
+def configure(given):
+    settings.update(given)
+
+def open_page(url, title, patience):
+    calls.append(("page", url, title, settings.get("where")))
+    return {"vm": settings.get("where")}
+
+def open_terminal(command, title, patience):
+    calls.append(("terminal", command, title))
+    return 7
+
+def close(kind, handle):
+    calls.append(("close", kind, handle))
+'''
+
+
+def test_an_adapter_s_own_backend_opens_and_closes_the_screens(tmp_path, monkeypatch):
+    path = tmp_path / "guest_screens.py"
+    path.write_text(BACKEND, encoding="utf-8")
+    spec = {"path": str(path), "settings": {"where": "a-vm"}}
+    manifest = screens.write_manifest(
+        tmp_path / "manifest.json", {"approval-queue": Page("dialog.html", title="Queue")},
+        fixtures=tmp_path, origin="http://127.0.0.1:5000", python="/venv/python",
+        state=tmp_path / "operator", backend=spec)
+    monkeypatch.setenv(screens.MANIFEST, str(manifest))
+    record = screens.open_screen("approval-queue")
+    assert record["handle"] == {"vm": "a-vm"}, "configured before it was used"
+    # The runner's sweep has no manifest: it is handed the same backend.
+    backend = screens.load_backend(spec)
+    assert screens.close_all(tmp_path / "operator", os_backend=backend) == ["approval-queue-1"]
+    assert backend.calls == [("close", "page", {"vm": "a-vm"})]
+
+
+def test_without_a_backend_of_its_own_it_is_this_os_s():
+    if sys.platform not in ("darwin", "win32"):
+        pytest.skip("no screen backend for this OS")
+    assert screens.backend({"screens": {}}) is screens.backend()

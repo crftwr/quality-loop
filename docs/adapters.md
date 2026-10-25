@@ -234,6 +234,28 @@ screens = {
   window list. Use the page's `<title>`, and a title of your own for a
   terminal.
 
+**Somewhere else than this desktop.** A product whose app runs in a VM puts
+its screens there too, with **`screen_backend()`**. It returns
+`{"path": file, "settings": {...}}` for one room, or None (the default) for
+this OS's own backend:
+
+- **The file** is a Python file in the product's checkout. It answers what
+  this OS's module answers: `open_page(url, title, patience)`,
+  `open_terminal(command, title, patience)` and `close(kind, handle)`.
+  `configure(settings)` is called first, if the file has it.
+- **When it is asked:** once per room, after the product is up. So the
+  settings can name where the product runs this time, such as a VM clone's
+  address.
+- **Who uses it:** the operator's `screen_open` and `screen_close`, and the
+  runner's sweep of what was left open.
+- **What it is handed:** the page's URL and the terminal's command line as
+  they are on this machine. Reaching that origin from the VM, and running
+  the script there, is the backend's work.
+
+**`platform()`** names the OS the room's app runs on, as `sys.platform`
+does. The operator is told it in phase 1. It defaults to this machine's, so
+override it along with `screen_backend()`.
+
 ## Evidence tools
 
 Commands the operator runs to check a Must line, declared by name:
