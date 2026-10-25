@@ -109,6 +109,8 @@ it.
    `quality_loop.operator.INSTRUCTIONS` exists, that `python -m
    quality_loop.mcp` answers `initialize`, and that `quality-loop init` in an
    empty directory writes `.claude/skills/quality-loop/` with its references.
+   The MCP server will not start without a screens manifest: write one with
+   `screens.write_manifest` and name it in `QUALITY_LOOP_MANIFEST`.
    OPERATOR.md and the skill are package data: a wheel without them gives an
    operator with no instructions and a conductor with no skill.
 5. Run `git tag -a vX.Y.Z` and push `main` and the tag.
