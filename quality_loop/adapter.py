@@ -103,6 +103,22 @@ class Adapter:
         """
         return [(case, "") for case in cases]
 
+    def screen_backend(self) -> dict | None:
+        """Where the declared screens are put up, when not on this desktop.
+
+        ``{"path": file, "settings": {...}}``: a Python file with
+        ``open_page``, ``open_terminal`` and ``close`` as in
+        `quality_loop.screens`, and what its ``configure(settings)`` is given.
+        Asked once per room, after the product is up, so settings may name
+        where it runs this time. None, the default, is this OS's own backend.
+        """
+        return None
+
+    def platform(self) -> str:
+        """The OS the room's app runs on, as ``sys.platform`` names it - what
+        the operator is told. Not this machine's when the product runs in a VM."""
+        return sys.platform
+
     def alive(self) -> bool:
         """Whether the product is still answering, asked on the heartbeat."""
         return True

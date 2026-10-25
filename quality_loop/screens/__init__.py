@@ -78,13 +78,16 @@ class Terminal:
 def write_manifest(path: pathlib.Path, screens: dict, *, fixtures: pathlib.Path,
                    origin: str, python: str, state: pathlib.Path,
                    evidence: dict | None = None, apps: dict | None = None,
-                   record: pathlib.Path | None = None) -> pathlib.Path:
+                   record: pathlib.Path | None = None,
+                   backend: dict | None = None) -> pathlib.Path:
     """The declarations, made absolute, for the operator's tools to read.
 
     ``evidence`` is ``{name: {"argv": [...], "help": "..."}}``: the product's
     evidence commands, run by the operator's MCP server and nothing else.
     ``apps`` (from `quality_loop.drive.manifest_entries`) are the apps its
     live check may drive, and ``record`` where those steps are written.
+    ``backend`` is the adapter's own screen backend (`Adapter.screen_backend`),
+    used in place of this OS's.
     """
     entries = {}
     for name, screen in screens.items():
@@ -98,6 +101,8 @@ def write_manifest(path: pathlib.Path, screens: dict, *, fixtures: pathlib.Path,
                 "evidence": evidence or {}}
     if apps:
         manifest.update(apps=apps, record=str(record))
+    if backend:
+        manifest["backend"] = backend
     path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return path
 
@@ -124,8 +129,33 @@ def _record(manifest: dict, opened: list[dict]) -> None:
     path.write_text(json.dumps(opened, indent=2), encoding="utf-8")
 
 
-def backend():
-    """This OS's implementation."""
+def load_backend(spec: dict):
+    """An adapter's own screen backend, from ``{"path": file, "settings": {...}}``.
+
+    The file is imported by path - it lives in the product's checkout, not in
+    an installed package - and, if it has ``configure(settings)``, that is
+    called before it is used. It answers what this OS's module answers:
+    ``open_page(url, title, patience)``, ``open_terminal(command, title,
+    patience)`` and ``close(kind, handle)``. It is how a product puts its
+    screens where its app runs - in a VM, say - rather than on this desktop.
+    """
+    import importlib.util
+    path = pathlib.Path(spec["path"])
+    module_spec = importlib.util.spec_from_file_location(
+        f"quality_loop_screen_backend_{path.stem}", path)
+    if module_spec is None or module_spec.loader is None:
+        raise ScreenError(f"cannot load the screen backend {path}")
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    if hasattr(module, "configure"):
+        module.configure(spec.get("settings", {}))
+    return module
+
+
+def backend(manifest: dict | None = None):
+    """The manifest's own backend if the adapter named one, else this OS's."""
+    if manifest and manifest.get("backend"):
+        return load_backend(manifest["backend"])
     if sys.platform == "darwin":
         from quality_loop.screens import _mac as module
     elif os.name == "nt":
@@ -148,7 +178,7 @@ def open_screen(name: str, patience: float = 15.0, os_backend=None) -> dict:
         raise ScreenError(f"no screen {name!r}; the adapter declares: "
                           + ", ".join(sorted(screens)))
     entry = screens[name]
-    os_backend = os_backend or backend()
+    os_backend = os_backend or backend(manifest)
     if entry["kind"] == "page":
         handle = os_backend.open_page(entry["url"], entry["title"], patience)
     elif entry["kind"] == "terminal":
@@ -174,7 +204,7 @@ def close_screen(screen_id: str, os_backend=None) -> dict:
     if record is None:
         raise ScreenError(f"{screen_id!r} was not opened here; opened: "
                           + (", ".join(r["id"] for r in opened) or "nothing"))
-    (os_backend or backend()).close(record["kind"], record["handle"])
+    (os_backend or backend(manifest)).close(record["kind"], record["handle"])
     _record(manifest, [r for r in opened if r["id"] != screen_id])
     return record
 
