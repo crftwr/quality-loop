@@ -79,6 +79,8 @@ under a policy the person sets. See [Running the loop](https://github.com/crftwr
   launch command and a redirected home up to evidence tools of its own.
 - [Reports](https://github.com/crftwr/quality-loop/blob/main/docs/reports.md): problems, severities, kinds and ids, the
   reproduction record, and `FINDINGS.md` / `findings.json`.
+- [Running the app in a VM](https://github.com/crftwr/quality-loop/blob/main/docs/guests.md): one image per OS,
+  the guest over SSH, a clean machine every run, screens in the guest.
 - [Isolation and permissions](https://github.com/crftwr/quality-loop/blob/main/docs/isolation.md): what keeps the room, the
   operator and the conductor in bounds, why each rule exists, and the known limits.
 - [Development](https://github.com/crftwr/quality-loop/blob/main/docs/development.md): tests, live tests, releasing.

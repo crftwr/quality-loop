@@ -251,6 +251,9 @@ this OS's own backend:
 - **What it is handed:** the page's URL and the terminal's command line as
   they are on this machine. Reaching that origin from the VM, and running
   the script there, is the backend's work.
+- **Ready-made:** `quality_loop.guest.screens` is such a backend for an app in
+  a VM reached over SSH; [Running the app in a VM](guests.md) has the rest of
+  that layer.
 
 **`platform()`** names the OS the room's app runs on, as `sys.platform`
 does. The operator is told it in phase 1. It defaults to this machine's, so
