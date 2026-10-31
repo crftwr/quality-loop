@@ -18,6 +18,8 @@ quality_loop/
   standin.py      fixtures in for the user's files, and back
   pages.py        fixture pages over HTTP, and their event record
   screens/        screens by name: the manifest, macOS and Windows backends
+  guest/          the app in a VM: the guest over SSH, Tart and VMware machines,
+                  the venv, the desktop session, a screen backend; boot/ runs there
   drive/          driving the app: key notation, a pty with pyte, OS keys and screenshots
   mcp.py          quality-loop's tools, as a stdio MCP server: screens, evidence, apps
   operator.py     the operator's session: phase 1, the live check, phase 2
