@@ -41,8 +41,8 @@ import tempfile
 import threading
 
 import quality_loop
-from quality_loop import (audit, drive, operator, pages, processes, progress, report,
-                          room, scenario, screens, standin, transcript)
+from quality_loop import (audit, awake, drive, operator, pages, processes, progress,
+                          report, room, scenario, screens, standin, transcript)
 
 
 class RunnerError(Exception):
@@ -200,7 +200,7 @@ def run(adapter, names: list[str] | None = None, model: str | None = None,
     state = "done"
     try:
         bundle = adapter.bundle()
-        with adapter.product():
+        with awake.held(status.say), adapter.product():
             def work(item):
                 case, variant = item
                 label = label_of(case, variant)
