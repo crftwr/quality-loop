@@ -12,4 +12,4 @@ room is handed, putting the user's machine back - is code here, not an
 agent's discretion.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
