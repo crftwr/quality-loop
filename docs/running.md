@@ -101,6 +101,12 @@ which the run turns into the same unwinding as Ctrl-C: every room in
 progress is collected, the user's files go back, and the findings so far are
 written. Never stop a run harder than that.
 
+**Sleep.** A run holds off this machine's idle sleep while it goes
+(`caffeinate -i` on macOS, `SetThreadExecutionState` on Windows) and says so
+in its log (`awake:`); a machine left alone during a run would otherwise
+sleep through it, a VM guest with it. The display may still sleep, and
+closing a laptop's lid still sleeps the machine.
+
 ## Parallel runs
 
 By default rooms run one after another. An adapter that can do better says
