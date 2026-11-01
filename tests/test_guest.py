@@ -208,6 +208,30 @@ def test_a_terminal_script_is_staged_and_run_with_the_guest_python(share, monkey
     assert (stage / "scripts" / "deploy.py").exists()
 
 
+def test_a_booted_windows_guest_is_waited_for_until_its_desktop_has_settled(share, monkeypatch):
+    """A powered-off snapshot boots: SSH answers before the automatic sign-in
+    has made the desktop, and then its startup programs run."""
+    guest = _guest(share, windows=True, vmx="/v.vmx", snapshot="s")
+    answers = iter(["-1", "-1", "4", "16"])
+    ssh = FakeSSH(lambda c: (next(answers) + "\n", 0))
+    monkeypatch.setattr(guest, "ssh", ssh)
+    slept = []
+    monkeypatch.setattr(guests.time, "sleep", slept.append)
+    guests.VMwareMachine(guest)._wait_for_the_desktop(settle=15)
+    assert len(ssh.commands) == 4 and "explorer" in ssh.commands[0]
+    assert slept == [3.0, 3.0, 11]
+
+
+def test_no_desktop_is_an_error_that_names_automatic_sign_in(share, monkeypatch):
+    guest = _guest(share, windows=True, vmx="/v.vmx", snapshot="s")
+    monkeypatch.setattr(guest, "ssh", FakeSSH(lambda c: ("-1\n", 0)))
+    clock = iter(range(0, 1000, 50))
+    monkeypatch.setattr(guests.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(guests.time, "sleep", lambda s: None)
+    with pytest.raises(GuestError, match="automatic sign-in"):
+        guests.VMwareMachine(guest, patience=120)._wait_for_the_desktop()
+
+
 def test_machine_follows_the_settings(share):
     assert isinstance(_guest(share, tart="base").machine(), guests.TartMachine)
     assert isinstance(_guest(share, vmx="/v.vmx", snapshot="s").machine(), guests.VMwareMachine)

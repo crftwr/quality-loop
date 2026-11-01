@@ -70,13 +70,23 @@ variable names, or None for a local run.
 - **Tart**: clone the base, run it with the share as `--dir`, wait for SSH,
   and delete the clone afterwards.
 - **VMware Fusion**: revert to the snapshot, start it headless, remount the
-  SMB share, wait for the guest's clock, and stop it afterwards. A snapshot
-  taken while the VM ran comes back running and signed in, in seconds.
+  SMB share, wait for the guest's clock and - on Windows - for the
+  automatically signed-in desktop to have been up for 15 seconds, and stop
+  it afterwards.
+
+**Take the snapshot with the VM shut down**, so that every run boots it, as
+a Tart clone does. A snapshot taken while the VM ran comes back running in
+seconds, but with whatever was half done at that moment, every time: one
+came back with Notepad's hand-off to its packaged app broken, so
+`notepad.exe` ran the inbox Notepad, which crashed within seconds on every
+run, while the same VM booted was fine. The image needs automatic sign-in
+for the guest's user (the run fails if no desktop comes up), and nothing
+that covers the desktop at sign-in - on Windows 11, turn off "Suggest ways
+to finish setting up my device" (Settings > System > Notifications).
 
 Learnt on Fusion with a vTPM-encrypted Windows 11 VM: `vmrun` cannot
-linked-clone it, nor snapshot it while it runs. Take a running-state snapshot
-in the Fusion app, after `vmrun suspend` - a VM started headless does not show
-in the app.
+linked-clone it, nor snapshot it while it runs. Shut down, `vmrun -vp
+<password> snapshot <vmx> <name>` takes it.
 
 ## The stage
 
