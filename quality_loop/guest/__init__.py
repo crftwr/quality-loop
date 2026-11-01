@@ -483,8 +483,14 @@ class TartMachine:
 class VMwareMachine:
     """A VMware Fusion VM reverted to a snapshot before the run.
 
-    A snapshot taken while the VM was running comes back running, signed in
-    and with SSH up, after `vmrun start`. The SMB share that was mounted on
+    Take the snapshot with the VM shut down, so that every run boots it. A
+    snapshot taken while it ran comes back running, signed in and with SSH
+    up, in seconds - and with whatever was half done at that moment, every
+    time: Keyhac's image came back with Notepad's hand-off to its packaged
+    app broken, so `notepad.exe` started the inbox one, which crashed within
+    seconds on every run, while the same VM booted was fine. On Windows, the
+    run waits for the automatic sign-in, which the image must have. The SMB
+    share that was mounted on
     the host does not survive the revert, so it is mounted again. The VM is
     shut down afterwards, its share unmounted first: the next run reverts it
     anyway, and a VM `vmrun` left running headless is one the Fusion app
@@ -495,8 +501,7 @@ class VMwareMachine:
     Learnt on Fusion 26 with a vTPM-encrypted Windows 11 VM: `vmrun` cannot
     linked-clone it ("Cannot read the virtual machine configuration file"),
     nor snapshot it while it runs ("Authentication for encrypted virtual
-    machine failed") - take a running-state snapshot in the Fusion app, after
-    `vmrun suspend` (a headless VM does not show there).
+    machine failed"). Shut down, `vmrun -vp <password> snapshot` takes it.
     """
 
     VMRUN = "/Applications/VMware Fusion.app/Contents/Library/vmrun"
@@ -533,8 +538,35 @@ class VMwareMachine:
                              f"to {self.snapshot!r}")
         self._mount()
         self._wait_for_the_clock()
+        if self.guest.windows:
+            self._wait_for_the_desktop()
         print(f"vm:      {self.guest.alias} reverted to {self.snapshot!r}")
         return self
+
+    def _wait_for_the_desktop(self, settle: float = 15.0) -> None:
+        """Wait until the guest's user is signed in, and has been for
+        ``settle`` seconds.
+
+        A booted VM answers SSH before the automatic sign-in has made the
+        desktop session `launch` starts programs in, and that session's
+        first seconds are its startup programs; the run starts after both.
+        A running-state snapshot is past them at once.
+        """
+        deadline = time.monotonic() + self.patience
+        while time.monotonic() < deadline:
+            said = self.guest.ssh(
+                "$e = Get-Process explorer -ErrorAction SilentlyContinue | "
+                "Where-Object { $_.SessionId -gt 0 } | Select-Object -First 1; "
+                "if ($e) { [int]((Get-Date) - $e.StartTime).TotalSeconds } else { -1 }")
+            try:
+                up = int(said.stdout.strip())
+            except ValueError:
+                up = -1
+            if up >= settle:
+                return
+            time.sleep(settle - up if up >= 0 else 3.0)
+        raise GuestError(f"{self.guest.alias}: no signed-in desktop after "
+                         f"{self.patience:.0f}s - is automatic sign-in set up?")
 
     def _mount(self) -> None:
         url = self.guest.settings.get("smb")
