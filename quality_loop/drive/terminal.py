@@ -87,6 +87,7 @@ class PtyApp:
         os.close(slave)
         self._lock = threading.Lock()
         self._changed = self._sent = time.monotonic()
+        self._drawn = False
         self._closed = False
         self._reader = threading.Thread(target=self._read, daemon=True)
         self._reader.start()
@@ -105,6 +106,7 @@ class PtyApp:
             with self._lock:
                 self.stream.feed(data)
                 self._changed = time.monotonic()
+                self._drawn = True
 
     def _write(self, data: bytes) -> None:
         if not self._closed:
@@ -146,13 +148,17 @@ class PtyApp:
         Quiet is counted from the last key sent as well as the last output: a
         key the app answers with nothing would otherwise be "settled" at once,
         on the silence from before it - the first live check recorded
-        ``waited: 0.0`` exactly there.
+        ``waited: 0.0`` exactly there. And nothing is settled before the app
+        has written anything: an app still importing is silent too, and a
+        slow start (a container with no bytecode cache, xefm#843) was read
+        as an empty screen.
         """
         deadline = time.monotonic() + patience
         while time.monotonic() < deadline:
             with self._lock:
                 since = time.monotonic() - max(self._changed, self._sent)
-            if since >= quiet or self.process.poll() is not None:
+                drawn = self._drawn
+            if (drawn and since >= quiet) or self.process.poll() is not None:
                 return True
             time.sleep(min(quiet / 4, 0.1))
         return False

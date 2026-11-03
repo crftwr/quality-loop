@@ -521,8 +521,10 @@ class TartMachine:
 class DockerMachine:
     """A container from ``docker`` (an image) for this run, removed after it.
 
-    It sleeps until the run is done, and every command is a `docker exec`
-    into it (:meth:`Guest.argv`), as root; the share is a bind mount, at the
+    It sleeps until the run is done, under ``--init``, which reaps what a
+    test orphans as a real system's init does (a zombie answers ``kill(pid,
+    0)`` as if it ran). Every command is a `docker exec` into it
+    (:meth:`Guest.argv`), as root; the share is a bind mount, at the
     share's guest side. The container's name stands in :attr:`Guest.hostname`
     while it is up. Nothing in it outlives the run: what a product needs
     beyond the image - an OS package - it installs on every run, as a VM's
@@ -536,7 +538,7 @@ class DockerMachine:
 
     def __enter__(self):
         said = subprocess.run(
-            ["docker", "run", "-d", "--rm", "--name", self.name,
+            ["docker", "run", "-d", "--rm", "--init", "--name", self.name,
              "-v", f"{self.guest.host_share}:{self.guest.guest_share}",
              "--entrypoint", "sleep", self.image, "infinity"],
             capture_output=True, text=True, stdin=subprocess.DEVNULL)
