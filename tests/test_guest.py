@@ -27,7 +27,7 @@ def share(tmp_path):
 def _guest(share, windows=False, **settings):
     guest = Guest("qa-test", share, r"C:\qa" if windows else str(share),
                   {"python": sys.executable, **settings})
-    guest._system = "Windows" if windows else "Darwin"
+    guest._windows = windows
     return guest
 
 

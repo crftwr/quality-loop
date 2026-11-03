@@ -135,6 +135,9 @@ class Guest:
         self.guest_share = guest_share
         self.settings = settings or {}
         self._system: str | None = None
+        #: What a caller may set instead of asking (tests do): True is
+        #: Windows, False macOS.
+        self._windows: bool | None = None
         #: Set while a run's clone is up: its address, which the alias's
         #: HostName does not know.
         self.hostname: str | None = None
@@ -236,6 +239,8 @@ class Guest:
     def system(self) -> str:
         """``Darwin``, ``Linux`` or ``Windows`` - asked once. A Windows
         guest's shell is PowerShell, where `uname` is no command."""
+        if self._system is None and self._windows is not None:
+            return "Windows" if self._windows else "Darwin"
         if self._system is None:
             said = self.ssh("uname -s")
             if said.returncode == 255:
