@@ -201,6 +201,8 @@ def test_a_lone_esc_is_not_glued_to_the_next_key(tmp_path):
     script.write_text(textwrap.dedent('''
         import os, sys, time, tty
         tty.setraw(0)
+        sys.stdout.write("ready\\r\\n")
+        sys.stdout.flush()
         last, out = time.monotonic(), []
         while len(out) < 2:
             data = os.read(0, 16)
@@ -221,3 +223,20 @@ def test_a_lone_esc_is_not_glued_to_the_next_key(tmp_path):
         app.stop()
     assert [hex_ for hex_, _gap in seen] == ["1b", "14"], "two reads, not one ESC+key burst"
     assert seen[1][1] >= terminal.ESC_SETTLE - 0.05
+
+
+@posix_only
+def test_a_slow_start_is_waited_for_not_read_as_an_empty_screen(tmp_path):
+    """XeFM in a container took longer to import than the quiet spell, and its
+    first screen was recorded empty (xefm#843)."""
+    pytest.importorskip("pyte")
+    from quality_loop.drive import terminal
+    script = tmp_path / "slow.py"
+    script.write_text("import sys, time\ntime.sleep(1.0)\nprint('drawn', flush=True)\n"
+                      "time.sleep(5)\n")
+    app = terminal.PtyApp([sys.executable, str(script)], rows=5, cols=60)
+    try:
+        assert app.wait_quiet(quiet=0.3, patience=5)
+        assert "drawn" in app.text()
+    finally:
+        app.stop()

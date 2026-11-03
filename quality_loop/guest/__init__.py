@@ -45,7 +45,17 @@ in ``~/.config/quality-loop/guests.toml`` (``QUALITY_LOOP_GUESTS`` moves it):
     smb = "//<user>@<guest>/<share>"    # remounted on the share's host side
     smb_password = "keychain:<service>"
 
+    [qa-linux]
+    share = "~/.cache/qa-guest=/qa"     # a bind mount
+    python = "/usr/local/bin/python3"
+    docker = "python:3.13-slim"         # a container per run, removed after
+
 Without a VM named, the run uses the guest as it is, already running.
+
+A Docker guest is no VM and has no SSH: its commands go through `docker
+exec`, and its share is a bind mount. It has no desktop, so it runs what
+needs none - a test suite, a terminal app - through the same stage, venv and
+runner as a VM (:mod:`quality_loop.guest.suite`).
 """
 
 from __future__ import annotations
@@ -69,6 +79,11 @@ import urllib.parse
 GUESTS = pathlib.Path("~/.config/quality-loop/guests.toml")
 
 HERE = pathlib.Path(__file__).resolve().parent
+
+#: Set, to the guest's alias, for a test suite a guest runs
+#: (:func:`quality_loop.guest.suite.run_pytest`); the pytest plugin skips the
+#: ``host_only`` tests where it is.
+IN_GUEST = "QUALITY_LOOP_IN_GUEST"
 
 
 class GuestError(Exception):
@@ -119,6 +134,9 @@ class Guest:
         self.host_share = pathlib.Path(host_share).resolve()
         self.guest_share = guest_share
         self.settings = settings or {}
+        self._system: str | None = None
+        #: What a caller may set instead of asking (tests do): True is
+        #: Windows, False macOS.
         self._windows: bool | None = None
         #: Set while a run's clone is up: its address, which the alias's
         #: HostName does not know.
@@ -155,17 +173,22 @@ class Guest:
         from another process: JSON, no secrets."""
         return {"alias": self.alias, "hostname": self.hostname,
                 "host_share": str(self.host_share), "guest_share": self.guest_share,
-                "windows": self.windows, "python": self.python}
+                "windows": self.windows, "system": self.system, "python": self.python}
 
     @classmethod
     def from_screen_settings(cls, settings: dict) -> "Guest":
         guest = cls(settings["alias"], pathlib.Path(settings["host_share"]),
                     settings["guest_share"], {"python": settings.get("python")})
-        guest._windows = settings["windows"]
+        guest._system = "Windows" if settings["windows"] else settings.get("system", "Darwin")
         guest.hostname = settings.get("hostname")
         return guest
 
     # --- talking to it ---------------------------------------------------------
+
+    @property
+    def docker(self) -> bool:
+        """Whether the guest is a container rather than a VM over SSH."""
+        return "docker" in self.settings
 
     def ssh_options(self) -> list[str]:
         if self.hostname is None:
@@ -174,11 +197,20 @@ class Guest:
         return ["-o", f"HostName={self.hostname}", "-o", f"HostKeyAlias={self.alias}",
                 "-o", "StrictHostKeyChecking=accept-new"]
 
+    def argv(self, command: str) -> list[str]:
+        """What runs the shell command ``command`` in the guest, from the
+        host: SSH to a VM, `docker exec` into a container."""
+        if self.docker:
+            if self.hostname is None:
+                raise GuestError(f"the container for {self.alias!r} is not up: "
+                                 "run inside guest.machine()")
+            return ["docker", "exec", self.hostname, "sh", "-c", command]
+        return ["ssh", "-o", "BatchMode=yes", *self.ssh_options(), self.alias, command]
+
     def ssh(self, command: str, timeout: float = 60) -> subprocess.CompletedProcess:
-        return subprocess.run(["ssh", "-o", "BatchMode=yes", *self.ssh_options(),
-                               self.alias, command],
-                              capture_output=True, text=True, timeout=timeout,
-                              stdin=subprocess.DEVNULL)
+        """Run ``command`` in the guest's shell (over SSH, or `docker exec`)."""
+        return subprocess.run(self.argv(command), capture_output=True, text=True,
+                              timeout=timeout, stdin=subprocess.DEVNULL)
 
     def reachable(self, patience: float) -> bool:
         """Whether SSH gets in within ``patience`` seconds."""
@@ -195,6 +227,8 @@ class Guest:
     def machine(self):
         """A context manager for the run: the VM up from a clean state, and
         put away afterwards, when the settings name one."""
+        if self.docker:
+            return DockerMachine(self)
         if "tart" in self.settings:
             return TartMachine(self)
         if "vmx" in self.settings:
@@ -202,20 +236,27 @@ class Guest:
         return contextlib.nullcontext()
 
     @property
-    def windows(self) -> bool:
-        """Whether the guest is Windows - asked once. A Windows guest's shell
-        is PowerShell, where `uname` is no command."""
-        if self._windows is None:
+    def system(self) -> str:
+        """``Darwin``, ``Linux`` or ``Windows`` - asked once. A Windows
+        guest's shell is PowerShell, where `uname` is no command."""
+        if self._system is None and self._windows is not None:
+            return "Windows" if self._windows else "Darwin"
+        if self._system is None:
             said = self.ssh("uname -s")
             if said.returncode == 255:
                 raise GuestError(f"cannot reach the VM as {self.alias!r}:\n{said.stderr}")
-            self._windows = said.stdout.strip() != "Darwin"
-        return self._windows
+            answer = said.stdout.strip()
+            self._system = answer if answer in ("Darwin", "Linux") else "Windows"
+        return self._system
+
+    @property
+    def windows(self) -> bool:
+        return self.system == "Windows"
 
     @property
     def platform(self) -> str:
         """``sys.platform`` as the guest's own Python would say it."""
-        return "win32" if self.windows else "darwin"
+        return {"Windows": "win32", "Darwin": "darwin", "Linux": "linux"}[self.system]
 
     @property
     def python(self) -> str:
@@ -252,6 +293,8 @@ class Guest:
         return self._tunnel("-R", port, start_new_session=True)
 
     def _tunnel(self, direction: str, port: int, **popen) -> subprocess.Popen:
+        if self.docker:
+            raise GuestError(f"{self.alias!r} is a container: no SSH tunnels")
         return subprocess.Popen(
             ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
              *self.ssh_options(), direction, f"{port}:127.0.0.1:{port}", self.alias],
@@ -477,6 +520,43 @@ class TartMachine:
         self._tart("delete", self.name, check=False)
         self.guest.hostname = None
         print(f"vm:      {self.name} deleted")
+        return False
+
+
+class DockerMachine:
+    """A container from ``docker`` (an image) for this run, removed after it.
+
+    It sleeps until the run is done, under ``--init``, which reaps what a
+    test orphans as a real system's init does (a zombie answers ``kill(pid,
+    0)`` as if it ran). Every command is a `docker exec` into it
+    (:meth:`Guest.argv`), as root; the share is a bind mount, at the
+    share's guest side. The container's name stands in :attr:`Guest.hostname`
+    while it is up. Nothing in it outlives the run: what a product needs
+    beyond the image - an OS package - it installs on every run, as a VM's
+    venv is.
+    """
+
+    def __init__(self, guest: Guest):
+        self.guest = guest
+        self.image = guest.settings["docker"]
+        self.name = f"ql-{guest.alias}-{os.getpid()}"
+
+    def __enter__(self):
+        said = subprocess.run(
+            ["docker", "run", "-d", "--rm", "--init", "--name", self.name,
+             "-v", f"{self.guest.host_share}:{self.guest.guest_share}",
+             "--entrypoint", "sleep", self.image, "infinity"],
+            capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        if said.returncode != 0:
+            raise GuestError(f"docker run {self.image}: {said.stderr.strip()}")
+        self.guest.hostname = self.name
+        print(f"vm:      container {self.name} from {self.image}")
+        return self
+
+    def __exit__(self, *exc):
+        subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
+        self.guest.hostname = None
+        print(f"vm:      container {self.name} removed")
         return False
 
 
