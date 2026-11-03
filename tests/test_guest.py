@@ -27,7 +27,7 @@ def share(tmp_path):
 def _guest(share, windows=False, **settings):
     guest = Guest("qa-test", share, r"C:\qa" if windows else str(share),
                   {"python": sys.executable, **settings})
-    guest._windows = windows
+    guest._system = "Windows" if windows else "Darwin"
     return guest
 
 
@@ -237,3 +237,88 @@ def test_machine_follows_the_settings(share):
     assert isinstance(_guest(share, vmx="/v.vmx", snapshot="s").machine(), guests.VMwareMachine)
     with _guest(share).machine():
         pass
+
+
+# --- Linux, and a container --------------------------------------------------------
+
+def test_the_system_is_asked_once_and_linux_is_not_windows(share, monkeypatch):
+    for answer, platform in (("Linux", "linux"), ("Darwin", "darwin"), ("", "win32")):
+        guest = Guest("qa-test", share, str(share), {"python": "python3"})
+        fake = FakeSSH(lambda command, a=answer: (a + "\n", 0))
+        monkeypatch.setattr(guest, "ssh", fake)
+        assert guest.platform == platform and guest.platform == platform
+        assert guest.windows == (platform == "win32")
+        assert fake.commands == ["uname -s"]
+
+
+def test_a_docker_guest_runs_its_commands_through_docker_exec(share):
+    guest = _guest(share, docker="python:3.13-slim")
+    assert isinstance(guest.machine(), guests.DockerMachine)
+    with pytest.raises(GuestError, match="not up"):
+        guest.argv("true")
+    guest.hostname = "ql-qa-test-1"
+    assert guest.argv("echo hi") == ["docker", "exec", "ql-qa-test-1", "sh", "-c", "echo hi"]
+    with pytest.raises(GuestError, match="no SSH tunnels"):
+        guest.forward(8000)
+
+
+def test_the_container_mounts_the_share_and_is_removed_after(share, monkeypatch):
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "id\n", "")
+
+    monkeypatch.setattr(guests.subprocess, "run", run)
+    guest = _guest(share, docker="python:3.13-slim")
+    with guest.machine() as machine:
+        assert guest.hostname == machine.name
+        started = calls[0]
+        assert started[:2] == ["docker", "run"] and f"{share}:{share}" in started
+        assert started[started.index("--entrypoint") + 1] == "sleep"
+    assert calls[-1] == ["docker", "rm", "-f", machine.name]
+    assert guest.hostname is None
+
+
+# --- the suite runner ---------------------------------------------------------------
+
+class LocalGuest(Guest):
+    """A POSIX guest that is this machine: its shell commands run here."""
+
+    def argv(self, command):
+        return ["sh", "-c", command]
+
+
+def test_run_pytest_runs_the_suite_in_the_guest_and_keeps_its_log_and_junit(share, tmp_path):
+    from quality_loop.guest import suite
+    guest = LocalGuest("qa-local", share, str(share), {"python": sys.executable})
+    guest._system = "Linux"
+    stage = guest.stage("ql-suite-")
+    tree = stage / "tree"
+    tree.mkdir()
+    (tree / "test_here.py").write_text(
+        "import os\n"
+        "def test_sees_the_guest():\n"
+        "    assert os.environ['QUALITY_LOOP_IN_GUEST'] == 'qa-local'\n"
+        "    assert os.environ['EXTRA'] == 'yes'\n", encoding="utf-8")
+    results = tmp_path / "results"
+    code = suite.run_pytest(guest, stage, sys.executable, ["-q", "test_here.py"],
+                            cwd=guest.path(tree), results=results, environ={"EXTRA": "yes"})
+    assert code == 0
+    assert "1 passed" in (results / "pytest.log").read_text()
+    assert "testcase" in (results / "junit.xml").read_text()
+
+
+def test_run_pytest_answers_3_when_the_runner_never_reports(share, tmp_path):
+    from quality_loop.guest import suite
+
+    class Silent(LocalGuest):
+        def argv(self, command):
+            return ["sh", "-c", "echo gone"]
+
+    guest = Silent("qa-local", share, str(share), {"python": sys.executable})
+    guest._system = "Darwin"
+    stage = guest.stage("ql-suite-")
+    assert suite.run_pytest(guest, stage, sys.executable, [], cwd=str(stage),
+                            results=tmp_path / "r") == 3
+    assert "gone" in (tmp_path / "r" / "pytest.log").read_text()

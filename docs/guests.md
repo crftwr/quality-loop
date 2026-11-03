@@ -52,13 +52,21 @@ snapshot = "QA-2026-10-30"           # reverted to before the run
 vm_password = "keychain:qa-win-vm"   # the VM's encryption password
 smb = "//qa@192.168.54.128/qa"       # remounted on the share's host side
 smb_password = "keychain:qa-win-smb"
+
+[qa-linux]
+share = "~/.cache/qa-guest=/qa"      # a bind mount
+python = "/usr/local/bin/python3"
+docker = "python:3.13-slim"          # a container per run, removed after
 ```
 
 - **`share`** is `<host side>=<guest side>`: the same folder as each sees it.
 - The alias's address, user and key are in `~/.ssh/config`.
 - **`keychain:<service>`** is read from the login Keychain when a run needs
   it.
-- Without `tart` or `vmx`, the guest is used as it is, already running.
+- Without `tart`, `vmx` or `docker`, the guest is used as it is, already
+  running.
+- **`docker`** names an image; the guest is then a container, not a VM, and
+  its alias is only the table's name. See [A container](#a-container).
 
 `Guest.from_environment("PRODUCT_QA_GUEST")` returns the guest an environment
 variable names, or None for a local run.
@@ -88,6 +96,25 @@ Learnt on Fusion with a vTPM-encrypted Windows 11 VM: `vmrun` cannot
 linked-clone it, nor snapshot it while it runs. Shut down, `vmrun -vp
 <password> snapshot <vmx> <name>` takes it.
 
+## A container
+
+A Docker guest goes through the same stage, venv and suite runner as a VM, so
+a product's Linux run is set up and reported like its macOS and Windows runs.
+What differs:
+
+- Commands go through `docker exec` (`guest.argv(command)` is what runs one;
+  `guest.ssh(command)` runs it), as root. There is no SSH, so no tunnels.
+- The share is a bind mount at its guest side.
+- The container is started for the run and removed after it
+  (`DockerMachine`); its name is `guest.hostname` while it is up.
+- It has no desktop: tests marked `desktop` do not belong there.
+- What the product needs beyond the image - an OS package such as a shared
+  library - it installs at the start of every run, the way the venv is built
+  every run. The image stays an OS and a Python.
+
+`guest.system` is `Darwin`, `Linux` or `Windows`, and `guest.platform` is
+`sys.platform` as the guest would say it.
+
 ## The stage
 
 `guest.stage()` makes a directory on the share, carrying what runs in the
@@ -103,6 +130,37 @@ the guest names it. The revert after the run throws it away. pip's download
 cache is on the share (`<host side>/.pip-cache`), so the next run downloads
 only what changed. List only third-party packages: what the product's makers
 build is staged.
+
+## The test suite
+
+`quality_loop.guest.suite.run_pytest(guest, stage, python, args, cwd=...,
+results=..., environ=..., path=...)` runs the product's pytest in the guest
+and returns its exit code (3 when it never told):
+
+- **Windows:** in the signed-in desktop session, from a scheduled task, with
+  `python.exe` - a console of its own, which a test that runs a console
+  program needs to inherit. Its output is a log on the share, printed on the
+  host as it grows.
+- **macOS and a container:** over the command's own stdout.
+
+`boot/pytest_main.py` writes the exit code to a file on the share when pytest
+is done. The log and the JUnit XML are copied to `results`. The suite runs
+with `QUALITY_LOOP_IN_GUEST` set to the alias.
+
+### Where a test may run: `desktop` and `host_only`
+
+`quality_loop.pytest_plugin` gives a product two marks. Load it in the
+product's pytest configuration (`addopts = -p quality_loop.pytest_plugin`);
+it is not registered for every pytest that has quality-loop installed.
+
+- **`desktop`**: the test takes the foreground, opens or moves windows, sends
+  real input, or changes the clipboard, the trash or the input source. It is
+  skipped unless pytest gets `--desktop`, which a VM run passes, so it never
+  disturbs the person at the host.
+- **`host_only`**: the test is of the host-side tooling - what stages a
+  guest, what reviews a release. It is skipped in a guest.
+  `--host-only` runs these alone (and is refused in a guest): the host's
+  share of a release's tests once the suite runs in the guests.
 
 ## Starting the app
 
